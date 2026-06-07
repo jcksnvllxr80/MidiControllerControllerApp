@@ -48,16 +48,18 @@ pluggable on-device link, selected and discovered at connect time.
 that flashes your Microchip MCU over serial. This app is the *same stack* aimed at the same
 class of device. We reuse a battle‑tested pattern instead of standing up a second runtime.
 
-> **Version:** target **Tauri v2** (current stable, better plugin/permission model). The
-> Rust `serialport`/`nusb` code is framework‑agnostic and ports almost verbatim from
-> `serial-flash-gui` (which is v1). If you'd rather stay on v1 to match your other apps,
-> the architecture below is unchanged — only the `tauri.conf.json` / capability wiring
-> differs. (See Open Questions.)
+> **Version (decided):** **Tauri v2** — current stable, capability‑based permissions. The
+> Rust `serialport`/`nusb` code ports almost verbatim from `serial-flash-gui` (v1); only
+> the `tauri.conf.json` / capability wiring differs between versions.
 
-The frontend stays **vanilla JS** — we port `controllerWebApp` (`index.html`, `css/`,
-vendored jQuery/Granim/Bootstrap) as‑is and swap only its network layer. The existing code
-already isolates I/O behind `config_api_url` / `control_api_url` and a handful of
-`$.getJSON` / `$.post` calls, so the change surface is small.
+The frontend is a **ground‑up rewrite in Svelte + Vite + TypeScript** (decided), replacing
+the vanilla‑JS/jQuery app. The existing `controllerWebApp` is kept as the **design and
+behavior reference**: its three states (Control / Configure / JSON), the Setlist → Song →
+Part → Pedal editors, the gradient backdrop, and `css/style.css` are reproduced as Svelte
+components, and its `data/*.json` shapes define the typed models. Svelte stores replace the
+old committed‑vs‑WIP dictionaries (`$config` / `$wipConfig`), and `@tauri-apps/api`
+`invoke()`/`listen()` replaces `$.getJSON`/`$.post`. TypeScript types are shared with the
+Rust `ProtocolMessage` surface so the wire contract is checked at compile time.
 
 ---
 
@@ -65,12 +67,12 @@ already isolates I/O behind `config_api_url` / `control_api_url` and a handful o
 
 ```
 ┌───────────────────────────── Tauri App ──────────────────────────────┐
-│  Frontend (WebView)                 Backend (Rust)                     │
+│  Frontend (Svelte + Vite + TS)      Backend (Rust)                     │
 │  ───────────────────                ───────────────────               │
-│  index.html / css / vendored libs                                     │
-│  http_requests.js (ported)          commands.rs   #[tauri::command]   │
-│  transport.js  ── invoke() ───────▶   scan_devices / connect /        │
-│  connection.js   listen()  ◀──events  disconnect / send_request       │
+│  routes/components · stores                                           │
+│  ($config $wipConfig $connection)   commands.rs   #[tauri::command]   │
+│  lib/transport.ts ─ invoke() ─────▶   scan_devices / connect /        │
+│  Connect.svelte    listen()  ◀─events disconnect / send_request       │
 │       │                                   │                            │
 │       │                              state.rs  (registry + active conn)│
 │       ▼                                   │                            │
@@ -180,17 +182,20 @@ COBS, CBOR) without touching transports or the UI. **This wire spec must match t
 firmware's `IConfigTransport`** — `docs/protocol.md` is the shared source of truth and is
 co‑designed with the firmware agent.
 
-### Frontend integration (minimal change)
+### Frontend (Svelte rewrite)
 
-- `js/transport.js` (new) — thin wrapper over `@tauri-apps/api` `invoke()` + `listen()`.
-  Exposes `request(op, args)` and tiny `getJSON`/`post` shims so the bulk of
-  `http_requests.js` stays as‑is; we only replace the URL‑building lines (`config_api_url`,
-  `control_api_url`) and the `$.getJSON`/`$.post` call sites.
-- `js/connection.js` (new) — the **Connect screen**: a "Scan" button → renders discovered
-  devices as **cards (image · name · protocol)** → "Connect" → live status. Driven by
-  backend events.
-- Everything downstream of a successful connect (Control / Configure / JSON states) is the
-  existing UI, untouched.
+- `lib/transport.ts` — typed wrapper over `@tauri-apps/api` `invoke()` + `listen()`.
+  Exposes `request(op, args)` returning typed `ProtocolMessage` responses; TS types mirror
+  the Rust enums (kept in `lib/protocol.ts`) so the wire contract is compile‑checked.
+- `lib/stores.ts` — Svelte stores replacing the old committed‑vs‑WIP dictionaries:
+  `connection` (status + active device), `config` (committed sets/songs/parts/pedals),
+  `wipConfig` (in‑progress edits; a "save" promotes WIP → committed via a `write_*` op).
+- `routes/Connect.svelte` — the **Connect screen**: "Scan" → renders discovered devices as
+  **cards (image · name · protocol)** → "Connect" → live status. Driven by `device-found` /
+  `connection-status` events. Gates the rest of the app until connected.
+- `routes/Control.svelte`, `Configure.svelte`, `JsonView.svelte` — the three existing
+  states, rebuilt as components: dpad + button grid, the Setlist/Song/Part/Pedal editors,
+  and the raw‑JSON viewer. `css/style.css` and the Granim gradient carry over as the look.
 
 ### Discovery & connection UX (the polling flow)
 
@@ -209,16 +214,21 @@ co‑designed with the firmware agent.
 ## Project layout (`MidiControllerControllerApp/`)
 
 ```
-src/                         # frontend, ported from controllerWebApp
-  index.html                 # + a Connect screen section
-  css/style.css
-  assets/                    # existing icons + per-protocol/device card images
-  src/                       # vendored jquery / granim / bootstrap (as-is)
-  js/
-    http_requests.js         # ported; network calls routed through transport.js
-    gradient_canvas.js       # as-is
-    transport.js             # NEW — invoke()/listen() wrapper + getJSON/post shims
-    connection.js            # NEW — scan / device cards / connect / status
+package.json · vite.config.ts · tsconfig.json   # Svelte + Vite + TS frontend
+index.html                   # Vite entry
+src/                         # Svelte app (rebuilt from controllerWebApp's UI)
+  main.ts · App.svelte
+  routes/
+    Connect.svelte           # scan / device cards / connect / status
+    Control.svelte           # dpad + button grid (live control)
+    Configure.svelte         # Setlist/Song/Part/Pedal editors
+    JsonView.svelte          # raw JSON viewer
+  lib/
+    transport.ts             # invoke()/listen() wrapper, typed request(op,args)
+    protocol.ts              # TS mirror of Rust ProtocolMessage + data models
+    stores.ts                # connection / config / wipConfig stores
+  styles/style.css           # carried over from controllerWebApp
+  assets/                    # icons + per-protocol/device card images
 src-tauri/
   Cargo.toml                 # tauri v2, serialport, nusb, tokio, serde, thiserror, anyhow
   tauri.conf.json
@@ -247,12 +257,14 @@ docs/
 
 ## Phases
 
-**Phase 0 — Scaffold & port the UI (shippable shell).**
-Init Tauri v2 in this repo. Copy `controllerWebApp` frontend into `src/`. Add a `MockTransport`
-(returns the existing `data/*.json` templates and canned `dpad`/`short` display text). Add
-`transport.js` + the Connect screen so the *entire existing UI runs end‑to‑end against the
-mock* — proves parity before any hardware. **Done when:** app launches as a native window,
-scan shows a fake device card, connect → full Control/Configure/JSON flow works.
+**Phase 0 — Scaffold & rebuild the UI (shippable shell).**
+Init Tauri v2 + Svelte/Vite/TS in this repo (`create-tauri-app`, Svelte template). Rebuild
+the `controllerWebApp` UI as Svelte components (Connect/Control/Configure/JsonView), porting
+`style.css` and the gradient backdrop. Add a `MockTransport` (returns the existing
+`data/*.json` shapes and canned `dpad`/`short` display text) plus `transport.ts` so the
+*entire UI runs end‑to‑end against the mock* — proves parity before any hardware.
+**Done when:** app launches as a native window, scan shows a fake device card, connect →
+full Control/Configure/JSON flow works.
 
 **Phase 1 — Transport interface + protocol + commands.**
 Define the `Transport` trait, `Protocol`/`DeviceInfo`/`DeviceIdentity`, `TransportRegistry`,
@@ -304,17 +316,22 @@ over TCP/WebSocket. No UI or core changes — that's the payoff of the interface
   `usb.rs` to a stub if the firmware is CDC‑only.
 - **One channel, two old APIs** — config (8081) + control (8090) unify into one framed link;
   `op` namespacing keeps them distinct without two sockets.
-- **Vanilla‑JS port over rewrite** — lowest risk, fastest to parity; a framework/TS rewrite
-  is a deliberate later choice, not a prerequisite.
-- **Tauri v2 vs v1** — v2 is the recommended target; v1 remains a drop‑in fallback to match
-  your existing apps since the Rust transport code is framework‑agnostic.
+- **Svelte rewrite over vanilla port** — chosen for a clean, typed, long‑term base. Risk is
+  UI regression vs the existing app; mitigated by keeping `controllerWebApp` as the live
+  reference and matching it state‑by‑state against the mock transport before hardware.
+
+## Decisions (locked)
+- **Framework:** Tauri **v2**.
+- **Frontend:** ground‑up **Svelte + Vite + TypeScript** rewrite; `controllerWebApp` is the
+  design/behavior reference.
+- **Transports:** build **both** `SerialTransport` and `UsbTransport` behind the trait; if
+  the firmware turns out CDC‑only, `usb.rs` collapses to a stub.
 
 ## Open questions (see chat)
-1. **USB nature:** does the firmware enumerate as a USB‑CDC virtual COM port, or a
-   vendor‑specific/HID USB interface? (Decides Serial vs USB adapter split.)
-2. **Tauri version:** v2 (recommended) or v1 (matches `serial-flash-gui`/`tauri-test`)?
-3. **Frontend:** port the vanilla JS as‑is (recommended), or modernize to a framework/TS?
-4. **Wire‑protocol ownership:** this app proposes `protocol.md` now, wait for the firmware's
-   `IConfigTransport` spec, or co‑design? And is `controllerWebApp` confirmed as the source
-   UI (vs the older `MidiControllerWebApp`)?
+1. **USB descriptor:** once the firmware's USB is implemented, confirm CDC‑virtual‑COM vs
+   vendor/HID so we keep or stub `UsbTransport`. (Designing for both until then.)
+2. **Wire‑protocol ownership:** this app proposes `docs/protocol.md` now, wait for the
+   firmware's `IConfigTransport` spec, or co‑design?
+3. **Source UI confirmation:** `controllerWebApp` is assumed as the reference UI — confirm
+   it's the right one (vs the older `MidiControllerWebApp`).
 ```
