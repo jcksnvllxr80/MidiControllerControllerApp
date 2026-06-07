@@ -190,36 +190,147 @@ impl Transport for MockTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
-    #[test]
-    fn lists_and_gets_seeded_sets() {
-        let mut t = MockTransport::new();
-        let list = t.request(&Request::ListSets).unwrap();
-        let names = list.data.unwrap();
-        assert!(names.as_array().unwrap().iter().any(|v| v == "Friday Gig"));
-
-        let got = t.request(&Request::GetSet { name: "Friday Gig".into() }).unwrap();
-        assert!(got.ok);
-        assert_eq!(got.data.unwrap()["songs"][0], "Intro");
+    fn names(resp: &Response) -> Vec<String> {
+        resp.data
+            .as_ref()
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
     }
 
     #[test]
-    fn write_then_read_roundtrips() {
-        let mut t = MockTransport::new();
-        t.request(&Request::WriteSet {
-            name: "New".into(),
-            data: serde_json::json!({ "name": "New", "songs": [] }),
-        })
-        .unwrap();
-        let got = t.request(&Request::GetSet { name: "New".into() }).unwrap();
-        assert!(got.ok);
+    fn discover_returns_one_identified_mock_device() {
+        let devices = MockTransport::new().discover();
+        assert_eq!(devices.len(), 1);
+        let d = &devices[0];
+        assert_eq!(d.id, "mock:0");
+        assert_eq!(d.protocol, Protocol::Mock);
+        assert_eq!(d.image, "mock");
+        assert!(matches!(d.address, Address::Mock));
+        assert_eq!(d.identity.as_ref().unwrap().name, "Mock MidiController");
     }
 
     #[test]
-    fn missing_set_is_an_error_response() {
+    fn connect_disconnect_track_state() {
         let mut t = MockTransport::new();
-        let got = t.request(&Request::GetSet { name: "Nope".into() }).unwrap();
-        assert!(!got.ok);
-        assert!(got.error.unwrap().contains("Nope"));
+        assert!(!t.is_connected());
+        assert_eq!(t.protocol(), Protocol::Mock);
+
+        let id = t.connect(&MockTransport::new().discover()[0]).unwrap();
+        assert_eq!(id.firmware, "sim-0.1");
+        assert!(t.is_connected());
+
+        t.disconnect().unwrap();
+        assert!(!t.is_connected());
+    }
+
+    #[test]
+    fn identify_and_ping() {
+        let mut t = MockTransport::new();
+        let id = t.request(&Request::Identify).unwrap();
+        assert_eq!(id.data.unwrap()["protocol_version"], 1);
+        assert!(t.request(&Request::Ping).unwrap().ok);
+    }
+
+    #[test]
+    fn lists_contain_seeded_names() {
+        let mut t = MockTransport::new();
+        assert!(names(&t.request(&Request::ListSets).unwrap()).contains(&"Friday Gig".to_string()));
+        assert!(names(&t.request(&Request::ListSongs).unwrap()).contains(&"Intro".to_string()));
+        assert!(names(&t.request(&Request::ListPedals).unwrap()).contains(&"Timeline".to_string()));
+    }
+
+    #[test]
+    fn lists_are_sorted() {
+        let mut t = MockTransport::new();
+        let got = names(&t.request(&Request::ListSets).unwrap());
+        let mut sorted = got.clone();
+        sorted.sort();
+        assert_eq!(got, sorted);
+    }
+
+    #[test]
+    fn get_existing_entities() {
+        let mut t = MockTransport::new();
+        assert_eq!(
+            t.request(&Request::GetSet { name: "Friday Gig".into() }).unwrap().data.unwrap()["songs"][0],
+            "Intro"
+        );
+        assert_eq!(
+            t.request(&Request::GetSong { name: "Intro".into() }).unwrap().data.unwrap()["tempo"],
+            120
+        );
+        assert!(t.request(&Request::GetPedal { name: "Timeline".into() }).unwrap().ok);
+    }
+
+    #[test]
+    fn get_missing_entities_error_with_name() {
+        let mut t = MockTransport::new();
+        for req in [
+            Request::GetSet { name: "Nope".into() },
+            Request::GetSong { name: "Nope".into() },
+            Request::GetPedal { name: "Nope".into() },
+        ] {
+            let r = t.request(&req).unwrap();
+            assert!(!r.ok);
+            assert!(r.error.unwrap().contains("Nope"));
+        }
+    }
+
+    #[test]
+    fn write_then_get_roundtrips_each_kind() {
+        let mut t = MockTransport::new();
+
+        t.request(&Request::WriteSet { name: "S".into(), data: json!({ "songs": ["x"] }) }).unwrap();
+        assert_eq!(t.request(&Request::GetSet { name: "S".into() }).unwrap().data.unwrap()["songs"][0], "x");
+
+        t.request(&Request::WriteSong { name: "So".into(), data: json!({ "tempo": 99 }) }).unwrap();
+        assert_eq!(t.request(&Request::GetSong { name: "So".into() }).unwrap().data.unwrap()["tempo"], 99);
+
+        t.request(&Request::WritePedal { name: "Pe".into(), data: json!({ "presets": [7] }) }).unwrap();
+        assert_eq!(t.request(&Request::GetPedal { name: "Pe".into() }).unwrap().data.unwrap()["presets"][0], 7);
+    }
+
+    #[test]
+    fn write_overwrites_existing() {
+        let mut t = MockTransport::new();
+        t.request(&Request::WriteSet { name: "Friday Gig".into(), data: json!({ "songs": [] }) }).unwrap();
+        let after = t.request(&Request::GetSet { name: "Friday Gig".into() }).unwrap();
+        assert_eq!(after.data.unwrap()["songs"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn delete_removes_each_kind() {
+        let mut t = MockTransport::new();
+        t.request(&Request::DeleteSet { name: "Friday Gig".into() }).unwrap();
+        assert!(!t.request(&Request::GetSet { name: "Friday Gig".into() }).unwrap().ok);
+
+        t.request(&Request::DeleteSong { name: "Intro".into() }).unwrap();
+        assert!(!t.request(&Request::GetSong { name: "Intro".into() }).unwrap().ok);
+
+        t.request(&Request::DeletePedal { name: "Timeline".into() }).unwrap();
+        assert!(!t.request(&Request::GetPedal { name: "Timeline".into() }).unwrap().ok);
+    }
+
+    #[test]
+    fn part_write_and_delete_are_accepted() {
+        let mut t = MockTransport::new();
+        assert!(t.request(&Request::WritePart { name: "A".into(), data: json!({}) }).unwrap().ok);
+        assert!(t.request(&Request::DeletePart { name: "A".into() }).unwrap().ok);
+    }
+
+    #[test]
+    fn dpad_and_short_return_display_messages() {
+        let mut t = MockTransport::new();
+        let d = t.request(&Request::Dpad { direction: "up".into() }).unwrap();
+        assert!(d.data.unwrap()["display_message"].as_str().unwrap().contains("up"));
+
+        let s = t.request(&Request::Short { button: "2".into() }).unwrap();
+        assert!(s.data.unwrap()["display_message"].as_str().unwrap().contains("2"));
     }
 }

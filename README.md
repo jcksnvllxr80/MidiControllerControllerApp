@@ -58,10 +58,24 @@ Other commands:
 
 ```bash
 npm run build          # build the frontend (Vite) into dist/
-npm run check          # type-check the Svelte/TS
+npm run check          # type-check the Svelte/TS (svelte-check)
+npm test               # frontend unit tests (Vitest)
 npm run tauri build    # produce installers (MSI/NSIS on Windows)
-cd src-tauri && cargo test   # Rust unit tests (protocol/mock)
+cd src-tauri && cargo test   # backend unit tests
 ```
+
+## Tests
+
+The wire contract and transport/connection logic are locked by unit tests on both sides:
+
+- **Backend (`cd src-tauri && cargo test`)** — 67 tests: protocol serde + the exact
+  per-`op` wire strings, JSON-lines codec framing (encode / line-read / roundtrip with
+  noise + wrong-id skipping), every Mock op, registry fan-out + protocol mapping,
+  Serial/USB discovery shape + connect guards, `AppState` connect/disconnect/send/status,
+  and error serialization.
+- **Frontend (`npm test`)** — 16 tests: protocol constants, the same 18-op wire contract
+  mirrored on the TS side, and the `transport.ts` invoke/listen wrappers (command names,
+  args, ok/error handling, event payload forwarding) against a mocked Tauri bridge.
 
 On launch you get a **Connect** screen. Click **Scan** to enumerate devices across all
 transports; each shows an image, name, and protocol. A **Mock MidiController (dev)** device

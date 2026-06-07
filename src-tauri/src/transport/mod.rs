@@ -112,3 +112,95 @@ pub trait Transport: Send {
     #[allow(dead_code)]
     fn is_connected(&self) -> bool;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protocol_labels_and_image_keys_cover_all_variants() {
+        let all = [
+            Protocol::Serial,
+            Protocol::Usb,
+            Protocol::Wifi,
+            Protocol::Ethernet,
+            Protocol::Mock,
+        ];
+        let labels: Vec<_> = all.iter().map(|p| p.label()).collect();
+        assert_eq!(labels, ["Serial", "USB", "Wi-Fi", "Ethernet", "Mock"]);
+        let keys: Vec<_> = all.iter().map(|p| p.image_key()).collect();
+        assert_eq!(keys, ["serial", "usb", "wifi", "ethernet", "mock"]);
+    }
+
+    #[test]
+    fn image_keys_are_unique() {
+        let all = [
+            Protocol::Serial,
+            Protocol::Usb,
+            Protocol::Wifi,
+            Protocol::Ethernet,
+            Protocol::Mock,
+        ];
+        let mut keys: Vec<_> = all.iter().map(|p| p.image_key()).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        assert_eq!(keys.len(), all.len());
+    }
+
+    #[test]
+    fn protocol_serializes_lowercase() {
+        assert_eq!(serde_json::to_value(Protocol::Serial).unwrap(), "serial");
+        assert_eq!(serde_json::to_value(Protocol::Usb).unwrap(), "usb");
+        assert_eq!(serde_json::to_value(Protocol::Wifi).unwrap(), "wifi");
+        let p: Protocol = serde_json::from_str("\"ethernet\"").unwrap();
+        assert_eq!(p, Protocol::Ethernet);
+    }
+
+    #[test]
+    fn address_is_tagged_by_kind() {
+        let v = serde_json::to_value(Address::Port { name: "COM4".into(), baud: 115200 }).unwrap();
+        assert_eq!(v["kind"], "port");
+        assert_eq!(v["name"], "COM4");
+        assert_eq!(v["baud"], 115200);
+
+        let v = serde_json::to_value(Address::Usb { vid: 0x1209, pid: 0x0001, serial: None }).unwrap();
+        assert_eq!(v["kind"], "usb");
+        assert_eq!(v["vid"], 0x1209);
+
+        let v = serde_json::to_value(Address::Net { host: "h".into(), port: 80 }).unwrap();
+        assert_eq!(v["kind"], "net");
+
+        let v = serde_json::to_value(Address::Mock).unwrap();
+        assert_eq!(v["kind"], "mock");
+    }
+
+    #[test]
+    fn device_info_round_trips_and_omits_absent_identity() {
+        let d = DeviceInfo {
+            id: "serial:COM4".into(),
+            protocol: Protocol::Serial,
+            name: "COM4".into(),
+            image: "serial".into(),
+            address: Address::Port { name: "COM4".into(), baud: 115200 },
+            identity: None,
+        };
+        let v = serde_json::to_value(&d).unwrap();
+        assert!(v.get("identity").is_none(), "absent identity must be omitted");
+
+        let back: DeviceInfo = serde_json::from_value(v).unwrap();
+        assert_eq!(back.id, "serial:COM4");
+        assert_eq!(back.protocol, Protocol::Serial);
+    }
+
+    #[test]
+    fn device_identity_round_trips() {
+        let id = DeviceIdentity {
+            name: "MidiController".into(),
+            firmware: "1.2.3".into(),
+            protocol_version: 1,
+        };
+        let back: DeviceIdentity = serde_json::from_value(serde_json::to_value(&id).unwrap()).unwrap();
+        assert_eq!(back.name, "MidiController");
+        assert_eq!(back.protocol_version, 1);
+    }
+}

@@ -3,7 +3,6 @@
 //! USB-CDC virtual COM port and a real UART via an FTDI/CP2102 adapter alike —
 //! the same port handling proven in `serial-flash-gui`.
 
-use std::io::{Read, Write};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -135,39 +134,58 @@ impl Conn {
     fn roundtrip(&mut self, req: &Request) -> Result<Response> {
         let id = self.next_id;
         self.next_id += 1;
+        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, MAX_SKIP_LINES)
+    }
+}
 
-        let bytes = codec::encode_request(id, req)?;
-        self.writer.write_all(&bytes)?;
-        self.writer.flush()?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        for _ in 0..MAX_SKIP_LINES {
-            let line = self.read_line()?;
-            if let Some(resp) = codec::match_response_line(&line, id)? {
-                return Ok(resp);
-            }
-        }
-        Err(anyhow!("no matching response for request {}", id))
+    #[test]
+    fn new_transport_is_disconnected() {
+        let t = SerialTransport::new();
+        assert!(!t.is_connected());
+        assert_eq!(t.protocol(), Protocol::Serial);
     }
 
-    /// Read one newline-terminated line from the port (byte-by-byte; serial
-    /// messages are small). Errors on timeout or a closed port.
-    fn read_line(&mut self) -> Result<String> {
-        let mut buf: Vec<u8> = Vec::with_capacity(128);
-        let mut byte = [0u8; 1];
-        loop {
-            match self.reader.read(&mut byte) {
-                Ok(0) => return Err(anyhow!("connection closed")),
-                Ok(_) => match byte[0] {
-                    b'\n' => break,
-                    b'\r' => {}
-                    b => buf.push(b),
-                },
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    return Err(anyhow!("timed out waiting for response"));
-                }
-                Err(e) => return Err(anyhow!("read error: {}", e)),
-            }
+    #[test]
+    fn discovered_ports_are_well_formed() {
+        // Whatever ports the host has, each must look like a Serial DeviceInfo.
+        for d in SerialTransport::new().discover() {
+            assert_eq!(d.protocol, Protocol::Serial);
+            assert!(d.id.starts_with("serial:"), "id was {}", d.id);
+            assert_eq!(d.image, "serial");
+            assert!(matches!(d.address, Address::Port { .. }));
+            assert!(d.identity.is_none()); // not probed during discovery
         }
-        Ok(String::from_utf8_lossy(&buf).into_owned())
+    }
+
+    #[test]
+    fn connect_rejects_non_port_address() {
+        let mut t = SerialTransport::new();
+        let device = DeviceInfo {
+            id: "mock:0".into(),
+            protocol: Protocol::Serial,
+            name: "wrong".into(),
+            image: "serial".into(),
+            address: Address::Mock,
+            identity: None,
+        };
+        let err = t.connect(&device).unwrap_err().to_string();
+        assert!(err.contains("port address"), "got: {err}");
+    }
+
+    #[test]
+    fn request_without_connection_errors() {
+        let mut t = SerialTransport::new();
+        assert!(t.request(&Request::Ping).is_err());
+    }
+
+    #[test]
+    fn disconnect_is_idempotent() {
+        let mut t = SerialTransport::new();
+        assert!(t.disconnect().is_ok());
+        assert!(t.disconnect().is_ok());
     }
 }

@@ -100,3 +100,54 @@ impl Transport for UsbTransport {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_transport_basics() {
+        let t = UsbTransport::new();
+        assert_eq!(t.protocol(), Protocol::Usb);
+        assert!(!t.is_connected());
+    }
+
+    #[test]
+    fn discovered_devices_are_well_formed() {
+        for d in UsbTransport::new().discover() {
+            assert_eq!(d.protocol, Protocol::Usb);
+            assert!(d.id.starts_with("usb:"), "id was {}", d.id);
+            assert_eq!(d.image, "usb");
+            assert!(matches!(d.address, Address::Usb { .. }));
+            assert!(d.identity.is_none());
+        }
+    }
+
+    #[test]
+    fn connect_is_a_clear_stub() {
+        let mut t = UsbTransport::new();
+        let device = DeviceInfo {
+            id: "usb:1209:0001".into(),
+            protocol: Protocol::Usb,
+            name: "x".into(),
+            image: "usb".into(),
+            address: Address::Usb { vid: 0x1209, pid: 0x0001, serial: None },
+            identity: None,
+        };
+        let err = t.connect(&device).unwrap_err().to_string();
+        assert!(err.contains("pending"), "got: {err}");
+        assert!(!t.is_connected());
+    }
+
+    #[test]
+    fn request_is_a_stub() {
+        let mut t = UsbTransport::new();
+        assert!(t.request(&Request::Ping).is_err());
+    }
+
+    #[test]
+    fn disconnect_ok() {
+        let mut t = UsbTransport::new();
+        assert!(t.disconnect().is_ok());
+    }
+}
