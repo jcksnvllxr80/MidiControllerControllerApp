@@ -1,5 +1,10 @@
 # MidiController Controller App: Web App → Native Desktop App
 
+> **Status:** Phases 0–2 implemented and building (Tauri v2 + Svelte + TS shell,
+> transport interface + JSON-lines protocol, Mock + Serial transports, USB
+> discovery). See [`../README.md`](../README.md) for the per-area status table.
+> Run with `npm install && npm run tauri dev`.
+
 ## Context
 The MidiController system has three parts:
 
