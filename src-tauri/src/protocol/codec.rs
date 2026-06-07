@@ -211,3 +211,96 @@ mod tests {
         assert!(roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 3).is_err());
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn encode_delete_variant() {
+        let bytes = encode_request(4, &Request::DeletePedal { name: "P".into() }).unwrap();
+        let v: Value = serde_json::from_str(String::from_utf8(bytes).unwrap().trim()).unwrap();
+        assert_eq!(v["op"], "delete_pedal");
+        assert_eq!(v["name"], "P");
+        assert_eq!(v["id"], 4);
+    }
+
+    #[test]
+    fn match_accepts_various_data_types() {
+        for raw in [
+            r#"{"id":1,"ok":true,"data":[1,2,3]}"#,
+            r#"{"id":1,"ok":true,"data":"hi"}"#,
+            r#"{"id":1,"ok":true,"data":true}"#,
+            r#"{"id":1,"ok":true,"data":null}"#,
+        ] {
+            assert!(match_response_line(raw, 1).unwrap().unwrap().ok);
+        }
+    }
+
+    #[test]
+    fn match_handles_large_id() {
+        let big = u64::MAX;
+        let line = format!(r#"{{"id":{big},"ok":true}}"#);
+        assert!(match_response_line(&line, big).unwrap().is_some());
+        assert!(match_response_line(&line, big - 1).unwrap().is_none());
+    }
+
+    #[test]
+    fn match_ignores_non_object_json() {
+        assert!(match_response_line("[1,2,3]", 1).unwrap().is_none());
+        assert!(match_response_line("42", 1).unwrap().is_none());
+        assert!(match_response_line("\"a string\"", 1).unwrap().is_none());
+    }
+
+    #[test]
+    fn match_tolerates_surrounding_whitespace() {
+        let r = match_response_line("   {\"id\":1,\"ok\":true}   ", 1).unwrap();
+        assert!(r.unwrap().ok);
+    }
+
+    #[test]
+    fn match_missing_id_is_none() {
+        assert!(match_response_line(r#"{"ok":true}"#, 1).unwrap().is_none());
+    }
+
+    #[test]
+    fn read_line_without_trailing_newline_errors_at_eof() {
+        let mut c = Cursor::new(b"no newline here".to_vec());
+        assert!(read_line(&mut c).is_err());
+    }
+
+    #[test]
+    fn read_line_handles_long_payloads() {
+        let payload = "x".repeat(5000);
+        let mut c = Cursor::new(format!("{payload}\n").into_bytes());
+        assert_eq!(read_line(&mut c).unwrap().len(), 5000);
+    }
+
+    #[test]
+    fn roundtrip_preserves_nested_data() {
+        let mut w: Vec<u8> = Vec::new();
+        let mut r = Cursor::new(b"{\"id\":1,\"ok\":true,\"data\":{\"a\":{\"b\":[1,2,{\"c\":3}]}}}\n".to_vec());
+        let resp = roundtrip(&mut w, &mut r, 1, &Request::Ping, 8).unwrap();
+        assert_eq!(resp.data.unwrap()["a"]["b"][2]["c"], 3);
+    }
+
+    #[test]
+    fn roundtrip_matches_second_frame_when_first_is_wrong_id() {
+        let mut w: Vec<u8> = Vec::new();
+        let mut r = Cursor::new(b"{\"id\":7,\"ok\":false}\n{\"id\":3,\"ok\":true,\"data\":1}\n".to_vec());
+        let resp = roundtrip(&mut w, &mut r, 3, &Request::Ping, 8).unwrap();
+        assert!(resp.ok);
+    }
+
+    #[test]
+    fn encode_is_a_single_line() {
+        let bytes = encode_request(
+            1,
+            &Request::WriteSet { name: "n".into(), data: serde_json::json!({ "x": 1 }) },
+        )
+        .unwrap();
+        assert_eq!(bytes.iter().filter(|&&b| b == b'\n').count(), 1);
+        assert_eq!(*bytes.last().unwrap(), b'\n');
+    }
+}

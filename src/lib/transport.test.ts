@@ -111,3 +111,33 @@ describe("event subscriptions", () => {
     expect(cb).toHaveBeenCalledWith(device);
   });
 });
+
+describe("request() data handling", () => {
+  it("returns undefined data on an ok response with no data", async () => {
+    mockInvoke.mockResolvedValueOnce({ ok: true });
+    await expect(request({ op: "ping" })).resolves.toBeUndefined();
+  });
+
+  it("forwards each call to invoke", async () => {
+    mockInvoke.mockResolvedValue({ ok: true, data: 1 });
+    await request({ op: "list_sets" });
+    await request({ op: "list_songs" });
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("onConnectionStatus payload", () => {
+  it("forwards connection-status payloads to the callback", async () => {
+    let handler: ((e: { payload: unknown }) => void) | undefined;
+    mockListen.mockImplementationOnce(
+      (_n: string, h: (e: { payload: unknown }) => void) => {
+        handler = h;
+        return Promise.resolve(() => {});
+      },
+    );
+    const cb = vi.fn();
+    await onConnectionStatus(cb);
+    handler?.({ payload: { connected: true } });
+    expect(cb).toHaveBeenCalledWith({ connected: true });
+  });
+});

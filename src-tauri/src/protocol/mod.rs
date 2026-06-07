@@ -172,3 +172,75 @@ mod tests {
         assert_eq!(r.error.unwrap(), "x");
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn all_ops_deserialize_to_expected_variant() {
+        let cases: Vec<(&str, fn(&Request) -> bool)> = vec![
+            (r#"{"op":"identify"}"#, |r| matches!(r, Request::Identify)),
+            (r#"{"op":"ping"}"#, |r| matches!(r, Request::Ping)),
+            (r#"{"op":"list_sets"}"#, |r| matches!(r, Request::ListSets)),
+            (r#"{"op":"get_set","name":"a"}"#, |r| matches!(r, Request::GetSet { .. })),
+            (r#"{"op":"list_songs"}"#, |r| matches!(r, Request::ListSongs)),
+            (r#"{"op":"get_song","name":"a"}"#, |r| matches!(r, Request::GetSong { .. })),
+            (r#"{"op":"list_pedals"}"#, |r| matches!(r, Request::ListPedals)),
+            (r#"{"op":"get_pedal","name":"a"}"#, |r| matches!(r, Request::GetPedal { .. })),
+            (r#"{"op":"write_set","name":"a","data":{}}"#, |r| matches!(r, Request::WriteSet { .. })),
+            (r#"{"op":"write_song","name":"a","data":{}}"#, |r| matches!(r, Request::WriteSong { .. })),
+            (r#"{"op":"write_part","name":"a","data":{}}"#, |r| matches!(r, Request::WritePart { .. })),
+            (r#"{"op":"write_pedal","name":"a","data":{}}"#, |r| matches!(r, Request::WritePedal { .. })),
+            (r#"{"op":"delete_set","name":"a"}"#, |r| matches!(r, Request::DeleteSet { .. })),
+            (r#"{"op":"delete_song","name":"a"}"#, |r| matches!(r, Request::DeleteSong { .. })),
+            (r#"{"op":"delete_part","name":"a"}"#, |r| matches!(r, Request::DeletePart { .. })),
+            (r#"{"op":"delete_pedal","name":"a"}"#, |r| matches!(r, Request::DeletePedal { .. })),
+            (r#"{"op":"dpad","direction":"up"}"#, |r| matches!(r, Request::Dpad { .. })),
+            (r#"{"op":"short","button":"1"}"#, |r| matches!(r, Request::Short { .. })),
+        ];
+        assert_eq!(cases.len(), 18);
+        for (raw, pred) in cases {
+            let req: Request = serde_json::from_str(raw).unwrap();
+            assert!(pred(&req), "wrong variant for {raw}");
+        }
+    }
+
+    #[test]
+    fn every_variant_round_trips_value_stable() {
+        let reqs = vec![
+            Request::Identify,
+            Request::GetSet { name: "x".into() },
+            Request::WritePedal { name: "p".into(), data: json!({ "a": 1 }) },
+            Request::Dpad { direction: "CCW".into() },
+        ];
+        for req in reqs {
+            let v1 = serde_json::to_value(&req).unwrap();
+            let back: Request = serde_json::from_value(v1.clone()).unwrap();
+            let v2 = serde_json::to_value(&back).unwrap();
+            assert_eq!(v1, v2);
+        }
+    }
+
+    #[test]
+    fn deserialize_ignores_correlation_id_field() {
+        let req: Request =
+            serde_json::from_str(r#"{"id":99,"op":"get_song","name":"Intro"}"#).unwrap();
+        assert!(matches!(req, Request::GetSong { name } if name == "Intro"));
+    }
+
+    #[test]
+    fn missing_required_field_fails() {
+        assert!(serde_json::from_str::<Request>(r#"{"op":"get_set"}"#).is_err());
+        assert!(serde_json::from_str::<Request>(r#"{"op":"dpad"}"#).is_err());
+    }
+
+    #[test]
+    fn response_error_serializes_without_data() {
+        let v = serde_json::to_value(Response::err("nope")).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"], "nope");
+        assert!(v.get("data").is_none());
+    }
+}

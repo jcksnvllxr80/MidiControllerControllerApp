@@ -204,3 +204,69 @@ mod tests {
         assert_eq!(back.protocol_version, 1);
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn address_variants_round_trip() {
+        let addrs = vec![
+            Address::Port { name: "COM1".into(), baud: 9600 },
+            Address::Usb { vid: 1, pid: 2, serial: Some("S".into()) },
+            Address::Usb { vid: 1, pid: 2, serial: None },
+            Address::Net { host: "h".into(), port: 1 },
+            Address::Mock,
+        ];
+        for a in addrs {
+            let v = serde_json::to_value(&a).unwrap();
+            let back: Address = serde_json::from_value(v).unwrap();
+            assert_eq!(serde_json::to_value(&a).unwrap(), serde_json::to_value(&back).unwrap());
+        }
+    }
+
+    #[test]
+    fn device_info_serializes_present_identity() {
+        let d = DeviceInfo {
+            id: "mock:0".into(),
+            protocol: Protocol::Mock,
+            name: "m".into(),
+            image: "mock".into(),
+            address: Address::Mock,
+            identity: Some(DeviceIdentity {
+                name: "n".into(),
+                firmware: "f".into(),
+                protocol_version: 2,
+            }),
+        };
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["identity"]["firmware"], "f");
+        assert_eq!(v["identity"]["protocol_version"], 2);
+    }
+
+    #[test]
+    fn protocol_is_copy_and_eq() {
+        let p = Protocol::Usb;
+        let q = p;
+        assert_eq!(p, q);
+        assert_ne!(Protocol::Usb, Protocol::Serial);
+    }
+
+    #[test]
+    fn image_keys_are_lowercase_nonempty() {
+        for p in [Protocol::Serial, Protocol::Usb, Protocol::Wifi, Protocol::Ethernet, Protocol::Mock] {
+            let k = p.image_key();
+            assert!(!k.is_empty());
+            assert_eq!(k, k.to_lowercase());
+        }
+    }
+
+    #[test]
+    fn protocol_all_serde_round_trip() {
+        for p in [Protocol::Serial, Protocol::Usb, Protocol::Wifi, Protocol::Ethernet, Protocol::Mock] {
+            let v = serde_json::to_value(p).unwrap();
+            let back: Protocol = serde_json::from_value(v).unwrap();
+            assert_eq!(p, back);
+        }
+    }
+}

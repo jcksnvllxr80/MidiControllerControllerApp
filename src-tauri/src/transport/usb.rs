@@ -151,3 +151,36 @@ mod tests {
         assert!(t.disconnect().is_ok());
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn discovered_ids_have_vid_pid_shape() {
+        for d in UsbTransport::new().discover() {
+            let parts: Vec<&str> = d.id.split(':').collect();
+            assert_eq!(parts.len(), 3, "id {}", d.id);
+            assert_eq!(parts[0], "usb");
+        }
+    }
+
+    #[test]
+    fn connect_any_device_is_stub_error() {
+        let mut t = UsbTransport::new();
+        let dev = DeviceInfo {
+            id: "usb:1:2".into(),
+            protocol: Protocol::Usb,
+            name: "x".into(),
+            image: "usb".into(),
+            address: Address::Usb { vid: 1, pid: 2, serial: None },
+            identity: None,
+        };
+        assert!(t.connect(&dev).is_err());
+    }
+
+    #[test]
+    fn default_is_disconnected() {
+        assert!(!UsbTransport::default().is_connected());
+    }
+}

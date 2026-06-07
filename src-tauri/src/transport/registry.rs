@@ -105,3 +105,48 @@ mod tests {
         assert_eq!(reg.make_transport(Protocol::Mock).unwrap().protocol(), Protocol::Mock);
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn exactly_one_mock_device_when_enabled() {
+        let count = TransportRegistry::new(true)
+            .discover_all()
+            .iter()
+            .filter(|d| d.protocol == Protocol::Mock)
+            .count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn no_mock_devices_when_disabled() {
+        let count = TransportRegistry::new(false)
+            .discover_all()
+            .iter()
+            .filter(|d| d.protocol == Protocol::Mock)
+            .count();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn default_constructs_and_discovers_without_panic() {
+        let _ = TransportRegistry::default().discover_all();
+    }
+
+    #[test]
+    fn made_mock_transport_answers() {
+        let mut t = TransportRegistry::new(true).make_transport(Protocol::Mock).unwrap();
+        let dev = DeviceInfo {
+            id: "mock:0".into(),
+            protocol: Protocol::Mock,
+            name: "m".into(),
+            image: "mock".into(),
+            address: crate::transport::Address::Mock,
+            identity: None,
+        };
+        assert!(t.connect(&dev).is_ok());
+        assert!(t.request(&crate::protocol::Request::Ping).unwrap().ok);
+    }
+}

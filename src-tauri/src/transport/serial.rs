@@ -189,3 +189,37 @@ mod tests {
         assert!(t.disconnect().is_ok());
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn discovered_ids_are_unique() {
+        let devices = SerialTransport::new().discover();
+        let n = devices.len();
+        let mut ids: Vec<_> = devices.iter().map(|d| d.id.clone()).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n);
+    }
+
+    #[test]
+    fn connect_rejects_net_address() {
+        let mut t = SerialTransport::new();
+        let dev = DeviceInfo {
+            id: "x".into(),
+            protocol: Protocol::Serial,
+            name: "x".into(),
+            image: "serial".into(),
+            address: Address::Net { host: "h".into(), port: 1 },
+            identity: None,
+        };
+        assert!(t.connect(&dev).is_err());
+    }
+
+    #[test]
+    fn default_is_disconnected() {
+        assert!(!SerialTransport::default().is_connected());
+    }
+}

@@ -6,6 +6,9 @@ mod protocol;
 mod state;
 mod transport;
 
+#[cfg(test)]
+mod wire_e2e;
+
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

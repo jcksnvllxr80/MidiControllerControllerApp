@@ -94,9 +94,9 @@ cd src-tauri && cargo build --release    # optimized
 ## Test
 
 ```bash
-npm test                       # frontend unit tests (Vitest)        — 16 tests
+npm test                       # frontend tests (Vitest + jsdom)     — 52 tests
 npm run check                  # type-check Svelte + TS (svelte-check) — 0 errors
-cd src-tauri && cargo test     # backend unit tests                  — 67 tests
+cd src-tauri && cargo test     # backend unit + e2e tests            — 125 tests
 ```
 
 Run the whole gate in one line (works in bash and PowerShell 7):
@@ -105,15 +105,21 @@ Run the whole gate in one line (works in bash and PowerShell 7):
 npm test && npm run check && npm run build && cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-What's covered (**83 tests total**):
+What's covered (**177 tests total**):
 
-- **Backend (`cargo test`, 67)** — protocol serde + the exact per-`op` wire strings,
-  JSON-lines codec framing (encode / line-read / roundtrip with noise + wrong-id skipping),
-  every Mock op, registry fan-out + protocol mapping, Serial/USB discovery shape + connect
-  guards, `AppState` connect/disconnect/send/status, and error serialization.
-- **Frontend (`npm test`, 16)** — protocol constants, the same 18-op wire contract mirrored
-  on the TS side, and the `transport.ts` invoke/listen wrappers (command names, args,
-  ok/error handling, event payload forwarding) against a mocked Tauri bridge.
+- **Backend (`cargo test`, 125)** — protocol serde + the exact per-`op` wire strings;
+  JSON-lines codec framing (encode / line-read / roundtrip; noise, wrong-id, stale-id,
+  large/nested payloads); every Mock op with parametric coverage (all d-pad directions,
+  all buttons, all entity kinds); registry fan-out + protocol mapping; Serial/USB discovery
+  shape + connect guards; `AppState` connect/disconnect/send/status; error serialization;
+  and an **end-to-end wire harness** (`wire_e2e.rs`) that runs full sessions against a fake
+  firmware speaking the framed protocol over a real byte stream.
+- **Frontend (`npm test`, 52)** — protocol constants + the same 18-op wire contract mirrored
+  on the TS side; the `transport.ts` invoke/listen wrappers against a mocked Tauri bridge;
+  and **component tests** (Testing Library + jsdom) driving the real Svelte views —
+  Connect (scan → device cards → connect, empty/error states), Control (every d-pad/button →
+  correct op + display), Configure (list/select/new/save/delete/tabs/invalid-JSON), JSON
+  view, and the App shell (connect gating, nav, disconnect, live status events).
 
 The 18-op wire contract is asserted from **both** languages, so any Rust↔TS drift fails a test.
 

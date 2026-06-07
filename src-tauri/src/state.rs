@@ -228,3 +228,74 @@ mod tests {
         assert!(json.get("error").is_none());
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use crate::transport::{mock::MockTransport, Address, Protocol};
+
+    fn mock_device() -> DeviceInfo {
+        MockTransport::new().discover().pop().unwrap()
+    }
+
+    #[test]
+    fn status_reflects_connected_device_and_identity() {
+        let s = AppState::new();
+        s.connect(mock_device()).unwrap();
+        let st = s.status();
+        assert!(st.connected);
+        assert_eq!(st.device.unwrap().id, "mock:0");
+        assert_eq!(st.identity.unwrap().firmware, "sim-0.1");
+    }
+
+    #[test]
+    fn write_then_get_via_state() {
+        let s = AppState::new();
+        s.connect(mock_device()).unwrap();
+        s.send(Request::WriteSet { name: "Q".into(), data: serde_json::json!({ "songs": [] }) })
+            .unwrap();
+        assert!(s.send(Request::GetSet { name: "Q".into() }).unwrap().ok);
+    }
+
+    #[test]
+    fn many_sends_succeed() {
+        let s = AppState::new();
+        s.connect(mock_device()).unwrap();
+        for _ in 0..25 {
+            assert!(s.send(Request::ListSongs).unwrap().ok);
+        }
+    }
+
+    #[test]
+    fn disconnect_when_idle_is_ok() {
+        let s = AppState::new();
+        assert!(!s.disconnect().unwrap().connected);
+    }
+
+    #[test]
+    fn connect_ethernet_is_unsupported() {
+        let s = AppState::new();
+        let dev = DeviceInfo {
+            id: "eth:0".into(),
+            protocol: Protocol::Ethernet,
+            name: "e".into(),
+            image: "ethernet".into(),
+            address: Address::Net { host: "h".into(), port: 1 },
+            identity: None,
+        };
+        match s.connect(dev) {
+            Err(AppError::Unsupported(p)) => assert_eq!(p, "Ethernet"),
+            other => panic!("expected Unsupported, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn status_is_independent_snapshot() {
+        let s = AppState::new();
+        s.connect(mock_device()).unwrap();
+        let earlier = s.status();
+        s.disconnect().unwrap();
+        assert!(earlier.connected);
+        assert!(!s.status().connected);
+    }
+}

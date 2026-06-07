@@ -79,3 +79,21 @@ describe("protocol constants", () => {
     });
   });
 });
+
+describe("entity ops integrity", () => {
+  it("get/write/delete ops are distinct within each kind", () => {
+    for (const k of ["set", "song", "pedal"] as const) {
+      const ops = Object.values(ENTITY_OPS[k]);
+      expect(new Set(ops).size).toBe(ops.length);
+    }
+  });
+
+  it("all list ops are unique across kinds", () => {
+    const lists = (["set", "song", "pedal"] as const).map((k) => ENTITY_OPS[k].list);
+    expect(new Set(lists).size).toBe(3);
+  });
+
+  it("PROTOCOL_LABEL has exactly five protocols", () => {
+    expect(Object.keys(PROTOCOL_LABEL)).toHaveLength(5);
+  });
+});

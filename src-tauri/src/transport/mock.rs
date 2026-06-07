@@ -334,3 +334,105 @@ mod tests {
         assert!(s.data.unwrap()["display_message"].as_str().unwrap().contains("2"));
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn list_len(t: &mut MockTransport, req: Request) -> usize {
+        t.request(&req).unwrap().data.unwrap().as_array().unwrap().len()
+    }
+
+    #[test]
+    fn initial_list_sizes() {
+        let mut t = MockTransport::new();
+        assert_eq!(list_len(&mut t, Request::ListSets), 2);
+        assert_eq!(list_len(&mut t, Request::ListSongs), 3);
+        assert_eq!(list_len(&mut t, Request::ListPedals), 3);
+    }
+
+    #[test]
+    fn all_dpad_directions_echo_in_message() {
+        let mut t = MockTransport::new();
+        for dir in ["up", "down", "CW", "CCW"] {
+            let m = t.request(&Request::Dpad { direction: dir.into() }).unwrap();
+            let msg = m.data.unwrap()["display_message"].as_str().unwrap().to_string();
+            assert!(msg.contains(dir), "msg {msg} missing {dir}");
+        }
+    }
+
+    #[test]
+    fn all_buttons_echo_in_message() {
+        let mut t = MockTransport::new();
+        for b in ["1", "2", "3", "4", "5"] {
+            let m = t.request(&Request::Short { button: b.into() }).unwrap();
+            assert!(m.data.unwrap()["display_message"].as_str().unwrap().contains(b));
+        }
+    }
+
+    #[test]
+    fn writing_grows_each_list() {
+        let mut t = MockTransport::new();
+        t.request(&Request::WriteSet { name: "Z".into(), data: json!({ "songs": [] }) }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListSets), 3);
+        t.request(&Request::WriteSong { name: "Z".into(), data: json!({}) }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListSongs), 4);
+        t.request(&Request::WritePedal { name: "Z".into(), data: json!({}) }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListPedals), 4);
+    }
+
+    #[test]
+    fn deleting_shrinks_each_list() {
+        let mut t = MockTransport::new();
+        t.request(&Request::DeleteSet { name: "Friday Gig".into() }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListSets), 1);
+        t.request(&Request::DeleteSong { name: "Intro".into() }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListSongs), 2);
+        t.request(&Request::DeletePedal { name: "Timeline".into() }).unwrap();
+        assert_eq!(list_len(&mut t, Request::ListPedals), 2);
+    }
+
+    #[test]
+    fn deleting_missing_is_still_ok() {
+        let mut t = MockTransport::new();
+        assert!(t.request(&Request::DeleteSet { name: "ghost".into() }).unwrap().ok);
+    }
+
+    #[test]
+    fn ping_has_no_data() {
+        let mut t = MockTransport::new();
+        let r = t.request(&Request::Ping).unwrap();
+        assert!(r.ok);
+        assert!(r.data.is_none());
+    }
+
+    #[test]
+    fn identify_reports_protocol_version_one() {
+        let mut t = MockTransport::new();
+        let id = t.connect(&MockTransport::new().discover()[0]).unwrap();
+        assert_eq!(id.protocol_version, 1);
+        assert_eq!(id.name, "Mock MidiController");
+    }
+
+    #[test]
+    fn lists_stay_sorted_after_writes() {
+        let mut t = MockTransport::new();
+        t.request(&Request::WriteSet { name: "AAA".into(), data: json!({}) }).unwrap();
+        t.request(&Request::WriteSet { name: "ZZZ".into(), data: json!({}) }).unwrap();
+        let names: Vec<String> = t
+            .request(&Request::ListSets)
+            .unwrap()
+            .data
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        assert_eq!(names, sorted);
+        assert_eq!(names.first().unwrap(), "AAA");
+    }
+}
