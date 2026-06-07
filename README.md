@@ -44,43 +44,89 @@ src-tauri/                 Rust backend
 docs/plan.md               design + roadmap
 ```
 
-## Develop / run
+## Prerequisites
 
-Prereqs: Node 18+, Rust (stable), and on Windows the WebView2 runtime (preinstalled on Win11).
-The Tauri v2 CLI is pinned locally (`devDependencies`), so no global install is needed.
+- **Node.js** 18+ (tested on 20.x) and **npm**
+- **Rust** stable — `rustc` / `cargo`, installed via [rustup](https://rustup.rs)
+- **WebView runtime**:
+  - Windows — WebView2 (preinstalled on Windows 11)
+  - macOS — WKWebView (built in)
+  - Linux — `webkit2gtk` + the standard [Tauri Linux build deps](https://v2.tauri.app/start/prerequisites/)
+
+The Tauri **v2** CLI is pinned in `devDependencies`, so there is nothing to install globally —
+always invoke it via `npm run tauri …`. (A globally installed `cargo tauri` may be v1; ignore it.)
+
+## Quick start
 
 ```bash
-npm install
-npm run tauri dev      # launches the desktop app with hot reload
+npm install            # frontend deps + the local Tauri v2 CLI
+npm run tauri dev      # compiles the Rust backend, starts Vite, opens the app (hot reload)
 ```
-
-Other commands:
-
-```bash
-npm run build          # build the frontend (Vite) into dist/
-npm run check          # type-check the Svelte/TS (svelte-check)
-npm test               # frontend unit tests (Vitest)
-npm run tauri build    # produce installers (MSI/NSIS on Windows)
-cd src-tauri && cargo test   # backend unit tests
-```
-
-## Tests
-
-The wire contract and transport/connection logic are locked by unit tests on both sides:
-
-- **Backend (`cd src-tauri && cargo test`)** — 67 tests: protocol serde + the exact
-  per-`op` wire strings, JSON-lines codec framing (encode / line-read / roundtrip with
-  noise + wrong-id skipping), every Mock op, registry fan-out + protocol mapping,
-  Serial/USB discovery shape + connect guards, `AppState` connect/disconnect/send/status,
-  and error serialization.
-- **Frontend (`npm test`)** — 16 tests: protocol constants, the same 18-op wire contract
-  mirrored on the TS side, and the `transport.ts` invoke/listen wrappers (command names,
-  args, ok/error handling, event payload forwarding) against a mocked Tauri bridge.
 
 On launch you get a **Connect** screen. Click **Scan** to enumerate devices across all
-transports; each shows an image, name, and protocol. A **Mock MidiController (dev)** device
-is always present so you can drive the whole UI with no hardware. (Set `MIDICTRL_NO_MOCK=1`
-to hide it.)
+transports; each shows an image, name, and protocol. A **Mock MidiController (dev)** device is
+always present, so you can drive the entire UI with no hardware attached. Set the env var
+`MIDICTRL_NO_MOCK=1` before launching to hide it.
+
+## Build
+
+```bash
+npm run build          # frontend only -> static assets in dist/
+npm run tauri build    # full desktop app + native installers (release)
+```
+
+`npm run tauri build` outputs the binary and platform installers under
+`src-tauri/target/release/` (bundles in `src-tauri/target/release/bundle/`):
+
+| Platform | Artifacts |
+|---|---|
+| Windows | `.msi` (WiX) and `.exe` (NSIS) |
+| macOS | `.app` and `.dmg` |
+| Linux | `.deb` and `.AppImage` |
+
+Backend only (no bundling):
+
+```bash
+cd src-tauri && cargo build              # debug
+cd src-tauri && cargo build --release    # optimized
+```
+
+## Test
+
+```bash
+npm test                       # frontend unit tests (Vitest)        — 16 tests
+npm run check                  # type-check Svelte + TS (svelte-check) — 0 errors
+cd src-tauri && cargo test     # backend unit tests                  — 67 tests
+```
+
+Run the whole gate in one line (works in bash and PowerShell 7):
+
+```bash
+npm test && npm run check && npm run build && cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+What's covered (**83 tests total**):
+
+- **Backend (`cargo test`, 67)** — protocol serde + the exact per-`op` wire strings,
+  JSON-lines codec framing (encode / line-read / roundtrip with noise + wrong-id skipping),
+  every Mock op, registry fan-out + protocol mapping, Serial/USB discovery shape + connect
+  guards, `AppState` connect/disconnect/send/status, and error serialization.
+- **Frontend (`npm test`, 16)** — protocol constants, the same 18-op wire contract mirrored
+  on the TS side, and the `transport.ts` invoke/listen wrappers (command names, args,
+  ok/error handling, event payload forwarding) against a mocked Tauri bridge.
+
+The 18-op wire contract is asserted from **both** languages, so any Rust↔TS drift fails a test.
+
+## Troubleshooting
+
+- **`tauri` runs the wrong version** — always use `npm run tauri …`; the v2 CLI is local to this
+  project. A global `cargo tauri` may be an older v1 install.
+- **Vite / Node engine errors** — Vite 6 needs Node 18+. On Node 20.10 stay on Vite 6 (not 7);
+  `npm install` already pins compatible versions.
+- **Scan shows no devices** — the Mock device should always appear; if it doesn't, ensure
+  `MIDICTRL_NO_MOCK` is unset. Real serial/USB devices only show when plugged in.
+- **`npm run tauri build` fails on Linux** — install the Tauri Linux system dependencies
+  (`webkit2gtk`, `librsvg`, …) per the prerequisites link above.
 
 ## Status
 
