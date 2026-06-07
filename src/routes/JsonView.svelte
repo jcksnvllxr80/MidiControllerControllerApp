@@ -38,31 +38,40 @@
 
 <div class="jsonview">
   <div class="toolbar">
+    <span class="eyebrow">Device config · JSON</span>
+    <span class="spacer"></span>
+    {#if error}<span class="error">{error}</span>{/if}
     <button class="primary" on:click={load} disabled={loading}>
       {loading ? "Loading…" : "Refresh"}
     </button>
-    {#if error}<span class="error">{error}</span>{/if}
   </div>
-  <textarea class="viewer" readonly value={json} spellcheck="false"></textarea>
+  <textarea class="viewer mono" readonly value={json} spellcheck="false"></textarea>
 </div>
 
 <style>
   .jsonview {
-    max-width: 920px;
+    max-width: 940px;
     margin: 0 auto;
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--s3);
   }
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: var(--s3);
+  }
+  .spacer {
+    flex: 1;
   }
   .viewer {
     flex: 1;
     min-height: 420px;
-    background: #0a0c12;
+    background: var(--inset);
+    border-radius: var(--r-lg);
+    padding: var(--s4);
+    color: var(--text-dim);
+    font-size: var(--t-sm);
   }
 </style>

@@ -27,27 +27,31 @@
 </script>
 
 <div class="control">
-  <textarea class="display" readonly rows="4" value={display} placeholder="Controller display…"></textarea>
-
-  {#if error}<p class="error">{error}</p>{/if}
-
-  <div class="dpad">
-    <button class="up" on:click={() => dpad("up")} disabled={busy}>↑</button>
-    <button class="left" on:click={() => dpad("CCW")} disabled={busy}>←</button>
-    <span class="center"></span>
-    <button class="right" on:click={() => dpad("CW")} disabled={busy}>→</button>
-    <button class="down" on:click={() => dpad("down")} disabled={busy}>↓</button>
+  <div class="panel screen">
+    <span class="eyebrow">Display</span>
+    <textarea class="display mono" readonly rows="3" value={display} placeholder="—"></textarea>
+    {#if error}<p class="error">{error}</p>{/if}
   </div>
 
-  <div class="buttons">
-    <div class="row">
-      <button on:click={() => short("4")} disabled={busy}>Song ↓</button>
-      <button on:click={() => short("5")} disabled={busy}>Song ↑</button>
+  <div class="panel">
+    <span class="eyebrow">Navigate</span>
+    <div class="dpad">
+      <button class="key up" on:click={() => dpad("up")} disabled={busy}>↑</button>
+      <button class="key left" on:click={() => dpad("CCW")} disabled={busy}>←</button>
+      <span class="hub"></span>
+      <button class="key right" on:click={() => dpad("CW")} disabled={busy}>→</button>
+      <button class="key down" on:click={() => dpad("down")} disabled={busy}>↓</button>
     </div>
-    <div class="row">
-      <button on:click={() => short("1")} disabled={busy}>Part ↓</button>
-      <button class="select" on:click={() => short("2")} disabled={busy}>Select</button>
-      <button on:click={() => short("3")} disabled={busy}>Part ↑</button>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Footswitches</span>
+    <div class="switches">
+      <button class="fsw" on:click={() => short("4")} disabled={busy}>Song ↓</button>
+      <button class="fsw" on:click={() => short("5")} disabled={busy}>Song ↑</button>
+      <button class="fsw" on:click={() => short("1")} disabled={busy}>Part ↓</button>
+      <button class="fsw select" on:click={() => short("2")} disabled={busy}>Select</button>
+      <button class="fsw" on:click={() => short("3")} disabled={busy}>Part ↑</button>
     </div>
   </div>
 </div>
@@ -58,61 +62,101 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: var(--s4);
   }
-  .display {
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: var(--s4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+  .panel .eyebrow {
+    display: block;
+  }
+
+  /* LCD readout */
+  .screen .display {
     text-align: center;
-    font-size: 1.05rem;
-    background: #0a0c12;
-    border-color: var(--accent);
-    color: var(--good);
-    min-height: 5.5rem;
+    font-size: var(--t-lg);
+    letter-spacing: 0.02em;
+    background: var(--inset);
+    border-color: var(--line);
+    color: var(--accent);
+    min-height: 4.75rem;
+    padding: var(--s3);
+    text-shadow: 0 0 12px rgba(245, 165, 36, 0.35);
   }
+  .screen .display::placeholder {
+    color: var(--text-faint);
+    text-shadow: none;
+  }
+
+  /* D-pad */
   .dpad {
     display: grid;
-    grid-template-columns: repeat(3, 64px);
-    grid-template-rows: repeat(3, 64px);
+    grid-template-columns: repeat(3, 62px);
+    grid-template-rows: repeat(3, 62px);
     justify-content: center;
-    gap: 0.5rem;
+    gap: var(--s2);
   }
-  .dpad button {
-    font-size: 1.4rem;
+  .key {
+    font-size: 1.3rem;
+    border-radius: var(--r-md);
+    background: var(--control);
   }
-  .dpad .up {
+  .hub {
+    grid-column: 2;
+    grid-row: 2;
+    border-radius: 50%;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    margin: 12px;
+  }
+  .key.up {
     grid-column: 2;
     grid-row: 1;
   }
-  .dpad .left {
+  .key.left {
     grid-column: 1;
     grid-row: 2;
   }
-  .dpad .center {
-    grid-column: 2;
-    grid-row: 2;
-  }
-  .dpad .right {
+  .key.right {
     grid-column: 3;
     grid-row: 2;
   }
-  .dpad .down {
+  .key.down {
     grid-column: 2;
     grid-row: 3;
   }
-  .buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+
+  /* Footswitches */
+  .switches {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--s2);
   }
-  .row {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
+  .fsw {
+    padding: var(--s4) var(--s2);
+    border-radius: var(--r-md);
+    background: linear-gradient(var(--control), var(--panel-2));
+    border-top: 1px solid var(--line-strong);
+    font-weight: 500;
   }
-  .row button {
-    flex: 1;
-    padding: 0.9rem;
+  .fsw:active {
+    background: var(--panel-2);
   }
-  .select {
-    border-color: var(--accent);
+  .fsw.select {
+    grid-column: 1 / -1;
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .fsw.select:hover {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: transparent;
   }
 </style>

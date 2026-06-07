@@ -66,16 +66,19 @@
 </script>
 
 <div class="connect">
-  <div class="banner gradient-banner">
-    <h1>MidiController</h1>
-    <p>Select a connection to your controller</p>
-  </div>
+  <header class="hero">
+    <div class="brand">
+      <span class="led amber"></span>
+      <h1>MidiController</h1>
+    </div>
+    <p class="eyebrow">Hardware controller · choose a connection to begin</p>
+  </header>
 
   <div class="toolbar">
     <button class="primary" on:click={scan} disabled={scanning}>
       {scanning ? "Scanning…" : "Scan for devices"}
     </button>
-    <span class="muted">{devices.length} found · Serial · USB · Wi-Fi/Ethernet (soon)</span>
+    <span class="status mono">{devices.length} found · Serial · USB · Wi-Fi/Ethernet soon</span>
   </div>
 
   {#if error}
@@ -83,27 +86,32 @@
   {/if}
 
   {#if devices.length === 0 && !scanning}
-    <p class="muted empty">No devices found. Plug in the controller and scan again.</p>
+    <div class="empty">
+      <p class="empty-title">No devices found</p>
+      <p class="muted">Plug in the controller and scan again.</p>
+    </div>
   {/if}
 
   <ul class="device-grid">
     {#each devices as d (d.id)}
       <li class="device-card">
-        <span
-          class="device-img"
-          role="img"
-          aria-label={d.protocol}
-          style="mask-image:url({imageFor(d.image)});-webkit-mask-image:url({imageFor(d.image)})"
-        ></span>
+        <span class="tile">
+          <span
+            class="device-img"
+            role="img"
+            aria-label={d.protocol}
+            style="mask-image:url({imageFor(d.image)});-webkit-mask-image:url({imageFor(d.image)})"
+          ></span>
+        </span>
         <div class="device-meta">
           <strong title={d.name}>{d.name}</strong>
-          <span class="proto">{PROTOCOL_LABEL[d.protocol]}</span>
+          <span class="proto eyebrow">{PROTOCOL_LABEL[d.protocol]}</span>
           {#if d.identity}
-            <span class="muted small">{d.identity.name} · fw {d.identity.firmware}</span>
+            <span class="fw mono">{d.identity.name} · {d.identity.firmware}</span>
           {/if}
         </div>
         <button
-          class="primary"
+          class="connect-btn"
           on:click={() => connect(d)}
           disabled={connectingId === d.id}
         >
@@ -116,65 +124,102 @@
 
 <style>
   .connect {
-    max-width: 820px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 1.25rem;
+    padding: var(--s8) var(--s4) var(--s5);
   }
-  .banner {
-    border-radius: var(--radius);
-    padding: 1.6rem 1.4rem;
-    box-shadow: var(--shadow);
+  .hero {
+    padding-bottom: var(--s5);
+    border-bottom: 1px solid var(--line);
   }
-  .banner h1 {
-    margin: 0;
-    font-size: 1.7rem;
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
   }
-  .banner p {
-    margin: 0.25rem 0 0;
-    opacity: 0.9;
+  .brand h1 {
+    font-size: var(--t-2xl);
+  }
+  .hero .eyebrow {
+    margin: var(--s3) 0 0;
   }
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
-    margin: 1.2rem 0 0.6rem;
+    gap: var(--s4);
+    margin: var(--s5) 0 var(--s4);
+  }
+  .status {
+    font-size: var(--t-xs);
+    color: var(--text-dim);
   }
   .empty {
-    padding: 1.5rem 0;
+    padding: var(--s6) 0;
+    text-align: center;
+  }
+  .empty-title {
+    margin: 0 0 var(--s1);
+    font-weight: 600;
+  }
+  .empty .muted {
+    margin: 0;
+    font-size: var(--t-sm);
   }
   .device-grid {
     list-style: none;
     padding: 0;
-    margin: 0.5rem 0 0;
+    margin: var(--s2) 0 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.9rem;
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+    gap: var(--s3);
   }
   .device-card {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.9rem;
+    gap: var(--s3);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: var(--s3);
+    transition:
+      border-color 0.15s ease,
+      transform 0.1s ease,
+      background 0.15s ease;
+  }
+  .device-card:hover {
+    border-color: var(--line-strong);
+    background: var(--panel-2);
+    transform: translateY(-1px);
+  }
+  .tile {
+    flex: none;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
   }
   .device-img {
-    width: 42px;
-    height: 42px;
-    flex: none;
-    background-color: var(--accent);
+    width: 26px;
+    height: 26px;
+    background-color: var(--text-dim);
     mask-repeat: no-repeat;
     -webkit-mask-repeat: no-repeat;
     mask-position: center;
     -webkit-mask-position: center;
     mask-size: contain;
     -webkit-mask-size: contain;
+    transition: background-color 0.15s ease;
+  }
+  .device-card:hover .device-img {
+    background-color: var(--accent);
   }
   .device-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 3px;
     min-width: 0;
     flex: 1;
   }
@@ -182,14 +227,25 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: 600;
   }
   .proto {
-    font-size: 0.78rem;
-    color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    color: var(--text-faint);
   }
-  .small {
-    font-size: 0.76rem;
+  .fw {
+    font-size: var(--t-2xs);
+    color: var(--text-dim);
+  }
+  .connect-btn {
+    flex: none;
+    font-size: var(--t-sm);
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+  .connect-btn:hover {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: transparent;
   }
 </style>

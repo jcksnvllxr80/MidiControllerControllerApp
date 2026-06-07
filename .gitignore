@@ -14,3 +14,4 @@ src-tauri/gen/
 .env
 .env.*
 .DS_Store
+.gstack/

@@ -105,39 +105,46 @@
 </script>
 
 <div class="configure">
-  <div class="tabs">
-    {#each ["set", "song", "pedal"] as k}
-      <button class:active={kind === k} on:click={() => switchKind(k as EntityKind)}>
-        {k[0].toUpperCase() + k.slice(1)}s
-      </button>
-    {/each}
+  <div class="bar">
+    <div class="segmented">
+      {#each ["set", "song", "pedal"] as k}
+        <button class:active={kind === k} on:click={() => switchKind(k as EntityKind)}>
+          {k[0].toUpperCase() + k.slice(1)}s
+        </button>
+      {/each}
+    </div>
     <button class="primary newbtn" on:click={newItem}>+ New {kind}</button>
   </div>
 
   <div class="panes">
-    <aside class="list">
+    <aside class="list panel">
+      <span class="eyebrow">{kind}s</span>
       {#if loading}
-        <p class="muted">Loading…</p>
+        <p class="muted hint">Loading…</p>
       {:else if names.length === 0}
-        <p class="muted">No {kind}s yet.</p>
+        <p class="muted hint">No {kind}s yet.</p>
       {/if}
       <ul>
         {#each names as name (name)}
           <li class:active={selected === name}>
             <button class="name" on:click={() => selectItem(name)}>{name}</button>
-            <button class="del" title="Delete" on:click={() => remove(name)}>🗑</button>
+            <button class="del" title="Delete" on:click={() => remove(name)} aria-label="Delete {name}">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12" />
+              </svg>
+            </button>
           </li>
         {/each}
       </ul>
     </aside>
 
-    <section class="editor">
+    <section class="editor panel">
       <label>
-        Name
+        <span class="eyebrow">Name</span>
         <input type="text" bind:value={editorName} placeholder="{kind} name" />
       </label>
       <label class="jsonlabel">
-        Config (JSON)
+        <span class="eyebrow">Config · JSON</span>
         <textarea bind:value={editorJson} rows="18" spellcheck="false"
           placeholder="Select an item, or click “New {kind}”."></textarea>
       </label>
@@ -153,33 +160,39 @@
 
 <style>
   .configure {
-    max-width: 920px;
+    max-width: 940px;
     margin: 0 auto;
   }
-  .tabs {
+  .bar {
     display: flex;
-    gap: 0.4rem;
-    margin-bottom: 1rem;
-  }
-  .tabs button.active {
-    border-color: var(--accent);
-    background: var(--bg-elev-2);
+    align-items: center;
+    margin-bottom: var(--s4);
   }
   .newbtn {
     margin-left: auto;
   }
   .panes {
     display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 1rem;
+    grid-template-columns: 232px 1fr;
+    gap: var(--s4);
     align-items: start;
   }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: var(--s3);
+  }
   .list {
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.5rem;
-    min-height: 200px;
+    min-height: 240px;
+  }
+  .list .eyebrow {
+    display: block;
+    padding: var(--s1) var(--s2) var(--s2);
+  }
+  .hint {
+    padding: var(--s2);
+    font-size: var(--t-sm);
   }
   .list ul {
     list-style: none;
@@ -189,43 +202,51 @@
   .list li {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    border-radius: 8px;
+    gap: var(--s1);
+    border-radius: var(--r-sm);
   }
   .list li.active {
-    background: var(--bg-elev-2);
+    background: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   .list .name {
     flex: 1;
     text-align: left;
     background: transparent;
     border: none;
-    padding: 0.5rem 0.5rem;
-    border-radius: 8px;
+    padding: 0.5rem 0.55rem;
+    border-radius: var(--r-sm);
+    color: var(--text);
+  }
+  .list li.active .name {
+    color: var(--accent);
   }
   .list .name:hover {
     color: var(--accent);
+    background: transparent;
   }
   .list .del {
+    display: grid;
+    place-items: center;
     background: transparent;
     border: none;
-    opacity: 0.5;
+    color: var(--text-faint);
     padding: 0.3rem 0.4rem;
   }
   .list .del:hover {
-    opacity: 1;
+    color: var(--danger);
+    background: transparent;
   }
   .editor {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: var(--s4);
+    padding: var(--s4);
   }
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--text-dim);
+    gap: var(--s2);
   }
   .jsonlabel {
     flex: 1;
@@ -233,6 +254,7 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: var(--s4);
+    font-size: var(--t-sm);
   }
 </style>
