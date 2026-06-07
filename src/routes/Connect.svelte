@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { scanDevices, connectDevice, onDeviceFound } from "../lib/transport";
+  import { scanDevices, connectDevice } from "../lib/transport";
   import { PROTOCOL_LABEL, type DeviceInfo } from "../lib/protocol";
 
   let devices: DeviceInfo[] = [];
   let scanning = false;
   let connectingId: string | null = null;
   let error = "";
-  let unlisten: UnlistenFn | undefined;
   let poll: ReturnType<typeof setInterval> | undefined;
 
   // Vite resolves the per-protocol device images at build time.
@@ -21,23 +19,29 @@
     return images[`../assets/devices/${key}.svg`] ?? images["../assets/devices/mock.svg"];
   }
 
-  function mergeDevice(d: DeviceInfo) {
-    if (!devices.some((x) => x.id === d.id)) {
-      devices = [...devices, d];
-    }
+  // Signature of the rendered list, so a poll that finds nothing new touches
+  // no DOM (no flicker). Includes identity so an identify change still updates.
+  let signature = "";
+  function sigOf(list: DeviceInfo[]): string {
+    return list.map((d) => `${d.id}:${d.identity?.firmware ?? ""}`).join("|");
   }
 
-  async function scan() {
-    scanning = true;
-    error = "";
+  // `silent` = background poll: don't flip the button or surface scan errors,
+  // and only reassign `devices` when the set actually changed.
+  async function scan(silent = false) {
+    if (!silent) scanning = true;
     try {
       const found = await scanDevices();
-      // Replace the list each scan so unplugged devices drop off.
-      devices = found;
+      const nextSig = sigOf(found);
+      if (nextSig !== signature) {
+        signature = nextSig;
+        devices = found;
+      }
+      error = "";
     } catch (e) {
-      error = String(e);
+      if (!silent) error = String(e);
     } finally {
-      scanning = false;
+      if (!silent) scanning = false;
     }
   }
 
@@ -54,14 +58,12 @@
     }
   }
 
-  onMount(async () => {
-    unlisten = await onDeviceFound(mergeDevice);
-    await scan();
-    poll = setInterval(scan, 4000); // poll so hot-plugged devices appear
+  onMount(() => {
+    scan();
+    poll = setInterval(() => scan(true), 4000); // quietly catch hot-plugs
   });
   onDestroy(() => {
     if (poll) clearInterval(poll);
-    unlisten?.();
   });
 </script>
 
@@ -75,7 +77,7 @@
   </header>
 
   <div class="toolbar">
-    <button class="primary" on:click={scan} disabled={scanning}>
+    <button class="primary" on:click={() => scan()} disabled={scanning}>
       {scanning ? "Scanning…" : "Scan for devices"}
     </button>
     <span class="status mono">{devices.length} found · Serial · USB · Wi-Fi/Ethernet soon</span>
