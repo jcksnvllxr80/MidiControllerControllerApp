@@ -25,148 +25,180 @@
       busy = false;
     }
   }
+
+  $: lines = display ? display.split("\n") : [];
 </script>
 
 <div class="control">
-  <div class="panel screen">
-    <span class="eyebrow" id="display-label">Display</span>
-    <textarea
-      class="display mono"
-      readonly
-      rows="3"
-      value={display}
-      placeholder="—"
-      aria-labelledby="display-label"
-    ></textarea>
+  <div class="surface">
+    <!-- Live readout -->
+    <div class="readout" role="status" aria-live="polite" aria-label="Controller display">
+      <span class="led live"></span>
+      <span class="readout-eyebrow eyebrow">Now</span>
+      {#if lines.length}
+        <div class="readout-text mono">
+          {#each lines as line}<span>{line}</span>{/each}
+        </div>
+      {:else}
+        <div class="readout-text mono idle">Ready</div>
+      {/if}
+    </div>
+
     {#if error}
       <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
     {/if}
-  </div>
 
-  <div class="panel">
-    <span class="eyebrow">Navigate</span>
-    <div class="dpad">
-      <button class="key up" on:click={() => dpad("up")} disabled={busy}>↑</button>
-      <button class="key left" on:click={() => dpad("CCW")} disabled={busy}>←</button>
-      <span class="hub"></span>
-      <button class="key right" on:click={() => dpad("CW")} disabled={busy}>→</button>
-      <button class="key down" on:click={() => dpad("down")} disabled={busy}>↓</button>
+    <!-- Song / Part steppers -->
+    <div class="steppers">
+      <div class="stepper">
+        <span class="label">Song</span>
+        <div class="pn">
+          <button aria-label="Previous song" on:click={() => short("4")} disabled={busy}>‹</button>
+          <button aria-label="Next song" on:click={() => short("5")} disabled={busy}>›</button>
+        </div>
+      </div>
+      <div class="stepper">
+        <span class="label">Part</span>
+        <div class="pn">
+          <button aria-label="Previous part" on:click={() => short("1")} disabled={busy}>‹</button>
+          <button aria-label="Next part" on:click={() => short("3")} disabled={busy}>›</button>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <span class="eyebrow">Footswitches</span>
-    <div class="switches">
-      <button class="fsw" on:click={() => short("4")} disabled={busy}>Song ↓</button>
-      <button class="fsw" on:click={() => short("5")} disabled={busy}>Song ↑</button>
-      <button class="fsw" on:click={() => short("1")} disabled={busy}>Part ↓</button>
-      <button class="fsw select" on:click={() => short("2")} disabled={busy}>Select</button>
-      <button class="fsw" on:click={() => short("3")} disabled={busy}>Part ↑</button>
+    <button class="select primary" on:click={() => short("2")} disabled={busy}>Select</button>
+
+    <!-- Encoder / menu (secondary) -->
+    <div class="menu">
+      <span class="eyebrow">Menu · encoder</span>
+      <div class="menu-keys">
+        <button aria-label="Menu up" on:click={() => dpad("up")} disabled={busy}>↑</button>
+        <button aria-label="Menu down" on:click={() => dpad("down")} disabled={busy}>↓</button>
+        <button aria-label="Rotate counter-clockwise" on:click={() => dpad("CCW")} disabled={busy}>⟲</button>
+        <button aria-label="Rotate clockwise" on:click={() => dpad("CW")} disabled={busy}>⟳</button>
+      </div>
     </div>
   </div>
 </div>
 
 <style>
   .control {
-    max-width: 460px;
+    max-width: 520px;
     margin: 0 auto;
+  }
+  .surface {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: var(--s5);
     display: flex;
     flex-direction: column;
     gap: var(--s4);
   }
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r-lg);
-    padding: var(--s4);
+
+  /* Live readout */
+  .readout {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: var(--s3);
-  }
-  .panel .eyebrow {
-    display: block;
-  }
-
-  /* LCD readout */
-  .screen .display {
-    text-align: center;
-    font-size: var(--t-lg);
-    letter-spacing: 0.02em;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s2);
+    min-height: 6rem;
     background: var(--inset);
-    border-color: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    padding: var(--s5) var(--s4);
+  }
+  .readout .led {
+    position: absolute;
+    top: var(--s3);
+    left: var(--s3);
+  }
+  .readout-eyebrow {
+    position: absolute;
+    top: var(--s3);
+    left: var(--s5);
+  }
+  .readout-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
+    font-size: var(--t-xl);
+    letter-spacing: 0.04em;
     color: var(--accent);
-    min-height: 4.75rem;
-    padding: var(--s3);
     text-shadow: 0 0 12px rgba(245, 165, 36, 0.35);
   }
-  .screen .display::placeholder {
+  .readout-text.idle {
+    font-size: var(--t-lg);
     color: var(--text-faint);
     text-shadow: none;
   }
 
-  /* D-pad */
-  .dpad {
-    display: grid;
-    grid-template-columns: repeat(3, 62px);
-    grid-template-rows: repeat(3, 62px);
-    justify-content: center;
-    gap: var(--s2);
+  /* Steppers */
+  .steppers {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line);
   }
-  .key {
-    font-size: 1.3rem;
-    border-radius: var(--r-md);
-    background: var(--control);
+  .stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--s3) var(--s1);
+    border-bottom: 1px solid var(--line);
   }
-  .hub {
-    grid-column: 2;
-    grid-row: 2;
-    border-radius: 50%;
+  .stepper .label {
+    font-weight: 600;
+  }
+  .pn {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
     background: var(--inset);
     border: 1px solid var(--line);
-    margin: 12px;
+    border-radius: var(--r-md);
   }
-  .key.up {
-    grid-column: 2;
-    grid-row: 1;
+  .pn button {
+    border: none;
+    background: transparent;
+    border-radius: var(--r-sm);
+    width: 46px;
+    height: 36px;
+    font-size: 1.35rem;
+    line-height: 1;
+    color: var(--text-dim);
   }
-  .key.left {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .key.right {
-    grid-column: 3;
-    grid-row: 2;
-  }
-  .key.down {
-    grid-column: 2;
-    grid-row: 3;
+  .pn button:hover {
+    background: var(--panel-2);
+    color: var(--text);
   }
 
-  /* Footswitches */
-  .switches {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+  /* Select — the one prominent action */
+  .select {
+    padding: var(--s4);
+    font-size: var(--t-base);
+  }
+
+  /* Encoder / menu — secondary */
+  .menu {
+    display: flex;
+    flex-direction: column;
     gap: var(--s2);
   }
-  .fsw {
-    padding: var(--s4) var(--s2);
-    border-radius: var(--r-md);
-    background: linear-gradient(var(--control), var(--panel-2));
-    border-top: 1px solid var(--line-strong);
-    font-weight: 500;
+  .menu-keys {
+    display: flex;
+    gap: var(--s2);
   }
-  .fsw:active {
-    background: var(--panel-2);
+  .menu-keys button {
+    flex: 1;
+    height: 42px;
+    font-size: 1.1rem;
+    color: var(--text-dim);
   }
-  .fsw.select {
-    grid-column: 1 / -1;
-    color: var(--accent);
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-  }
-  .fsw.select:hover {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-color: transparent;
+  .menu-keys button:hover {
+    color: var(--text);
   }
 </style>

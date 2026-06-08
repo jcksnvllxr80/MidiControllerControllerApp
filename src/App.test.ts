@@ -53,8 +53,8 @@ describe("App shell", () => {
   it("defaults to the Control view when connected", async () => {
     t.fetchConnectionStatus.mockResolvedValue(connected);
     render(App);
-    // the d-pad up button only exists in Control
-    expect(await screen.findByRole("button", { name: "↑" })).toBeTruthy();
+    // the Select control only exists in the Control view
+    expect(await screen.findByRole("button", { name: "Select" })).toBeTruthy();
   });
 
   it("nav switches to the Configure view", async () => {
