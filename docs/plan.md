@@ -339,4 +339,21 @@ over TCP/WebSocket. No UI or core changes — that's the payoff of the interface
    firmware's `IConfigTransport` spec, or co‑design?
 3. **Source UI confirmation:** `controllerWebApp` is assumed as the reference UI — confirm
    it's the right one (vs the older `MidiControllerWebApp`).
-```
+
+## Design decisions — UI/UX (from /plan-design-review)
+
+Full system of record is [`../DESIGN.md`](../DESIGN.md) (tokens in `src/app.css`);
+deferred polish is in [`../TODOS.md`](../TODOS.md). Locked decisions:
+
+- **Aesthetic:** studio-rack / instrument-panel (App UI). One amber accent, Space
+  Grotesk + IBM Plex Mono, warm near-black layered surfaces. No AI-slop patterns
+  (no blue→purple gradient, no `system-ui` primary, no emoji controls).
+- **Interaction states:** every feature specifies loading / empty / error / success /
+  connection-lost. Errors are humanized via `lib/errors.ts` and shown in a `.notice`
+  with `role="alert"` — never raw exception text. Empty states carry a primary action.
+- **Connection loss:** a 5s heartbeat pings the device; a drop returns to Connect with
+  a "Lost connection to X" banner and auto re-scan (silent poll, no list flicker).
+- **Accessibility:** WCAG AA contrast (faint-text floor 5.3:1), `<nav>` / `<main>`
+  landmarks, `aria-current` on active tabs, focus-visible rings, `aria-live` status/error
+  regions, and `prefers-reduced-motion` honored.
+- **Out of scope:** mobile/touch — this is a fixed desktop window (Tauri, min 720×560).

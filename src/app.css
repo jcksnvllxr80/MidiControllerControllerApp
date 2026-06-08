@@ -16,8 +16,8 @@
 
   /* Text */
   --text: #ededf1;
-  --text-dim: #9a9aa6;
-  --text-faint: #63636e;
+  --text-dim: #9a9aa6; /* 6.9:1 on --bg */
+  --text-faint: #85858f; /* 5.3:1 on --bg — WCAG AA for the mono micro-labels */
 
   /* One accent: amber, like an amp panel LED / tube glow */
   --accent: #f5a524;
@@ -226,4 +226,51 @@ textarea {
 .led.amber {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
+}
+
+/* ---- Notice (designed error / warning, replaces raw red text) --------- */
+.notice {
+  display: flex;
+  gap: var(--s2);
+  align-items: flex-start;
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+.notice .ic {
+  flex: none;
+  margin-top: 1px;
+}
+.notice.err {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.32);
+  color: #ffb3b3;
+}
+.notice.warn {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+}
+
+/* ---- Empty state ------------------------------------------------------ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s6) var(--s4);
+  text-align: center;
+  color: var(--text-dim);
+}
+
+/* Respect reduced-motion: no hover lifts, drifts, or transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

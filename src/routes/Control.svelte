@@ -1,5 +1,6 @@
 <script lang="ts">
   import { request } from "../lib/transport";
+  import { humanizeError } from "../lib/errors";
 
   let display = "";
   let busy = false;
@@ -19,7 +20,7 @@
       const data = await request<{ display_message?: string }>(req);
       display = (data?.display_message ?? "").split(" - ").join("\n");
     } catch (e) {
-      error = String(e);
+      error = humanizeError(e);
     } finally {
       busy = false;
     }
@@ -28,9 +29,18 @@
 
 <div class="control">
   <div class="panel screen">
-    <span class="eyebrow">Display</span>
-    <textarea class="display mono" readonly rows="3" value={display} placeholder="—"></textarea>
-    {#if error}<p class="error">{error}</p>{/if}
+    <span class="eyebrow" id="display-label">Display</span>
+    <textarea
+      class="display mono"
+      readonly
+      rows="3"
+      value={display}
+      placeholder="—"
+      aria-labelledby="display-label"
+    ></textarea>
+    {#if error}
+      <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
+    {/if}
   </div>
 
   <div class="panel">

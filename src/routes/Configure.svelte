@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { request } from "../lib/transport";
   import { ENTITY_OPS, type EntityKind, type Request } from "../lib/protocol";
+  import { humanizeError } from "../lib/errors";
 
   let kind: EntityKind = "set";
   let names: string[] = [];
@@ -25,7 +26,7 @@
       names = (await request<string[]>({ op: ENTITY_OPS[kind].list } as unknown as Request)) ?? [];
     } catch (e) {
       names = [];
-      setStatus(String(e), false);
+      setStatus(humanizeError(e), false);
     } finally {
       loading = false;
     }
@@ -39,7 +40,7 @@
       editorName = name;
       editorJson = JSON.stringify(data, null, 2);
     } catch (e) {
-      setStatus(String(e), false);
+      setStatus(humanizeError(e), false);
     }
   }
 
@@ -68,7 +69,7 @@
       await refresh();
       selected = editorName;
     } catch (e) {
-      setStatus(String(e), false);
+      setStatus(humanizeError(e), false);
     }
   }
 
@@ -83,7 +84,7 @@
       setStatus(`Deleted “${name}”.`, true);
       await refresh();
     } catch (e) {
-      setStatus(String(e), false);
+      setStatus(humanizeError(e), false);
     }
   }
 
@@ -108,7 +109,11 @@
   <div class="bar">
     <div class="segmented">
       {#each ["set", "song", "pedal"] as k}
-        <button class:active={kind === k} on:click={() => switchKind(k as EntityKind)}>
+        <button
+          class:active={kind === k}
+          aria-current={kind === k ? "page" : undefined}
+          on:click={() => switchKind(k as EntityKind)}
+        >
           {k[0].toUpperCase() + k.slice(1)}s
         </button>
       {/each}
@@ -122,7 +127,10 @@
       {#if loading}
         <p class="muted hint">Loading…</p>
       {:else if names.length === 0}
-        <p class="muted hint">No {kind}s yet.</p>
+        <div class="list-empty">
+          <p class="muted">No {kind}s yet.</p>
+          <button class="ghost" on:click={newItem}>+ New {kind}</button>
+        </div>
       {/if}
       <ul>
         {#each names as name (name)}
@@ -150,9 +158,9 @@
       </label>
       <div class="actions">
         <button class="primary" on:click={save} disabled={!editorJson.trim()}>Save {kind}</button>
-        {#if status}
-          <span class:ok={statusOk} class:error={!statusOk}>{status}</span>
-        {/if}
+        <span class="status-msg" class:ok={statusOk} class:error={!statusOk} role="status" aria-live="polite">
+          {status}
+        </span>
       </div>
     </section>
   </div>
@@ -193,6 +201,27 @@
   .hint {
     padding: var(--s2);
     font-size: var(--t-sm);
+  }
+  .list-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s2);
+    padding: var(--s2);
+  }
+  .ghost {
+    background: transparent;
+    border: 1px dashed var(--line-strong);
+    color: var(--text-dim);
+    font-size: var(--t-sm);
+    padding: 0.4rem 0.6rem;
+  }
+  .ghost:hover {
+    color: var(--accent);
+    border-color: var(--accent-line);
+  }
+  .status-msg:empty {
+    display: none;
   }
   .list ul {
     list-style: none;

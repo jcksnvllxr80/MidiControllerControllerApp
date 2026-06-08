@@ -8,6 +8,7 @@ vi.mock("./lib/transport", () => ({
   onDeviceFound: vi.fn(() => Promise.resolve(() => {})),
   onConnectionStatus: vi.fn(() => Promise.resolve(() => {})),
   fetchConnectionStatus: vi.fn(() => Promise.resolve({ connected: false })),
+  sendRequest: vi.fn(() => Promise.resolve({ ok: true })),
   request: vi.fn(() => Promise.resolve(null)),
 }));
 

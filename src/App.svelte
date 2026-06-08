@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { connection } from "./lib/stores";
+  import { connection, connectionError } from "./lib/stores";
   import {
     onConnectionStatus,
     fetchConnectionStatus,
     disconnectDevice,
+    sendRequest,
   } from "./lib/transport";
   import { PROTOCOL_LABEL } from "./lib/protocol";
   import Connect from "./routes/Connect.svelte";
@@ -16,6 +17,7 @@
   type View = "control" | "configure" | "json";
   let view: View = "control";
   let unlisten: UnlistenFn | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   onMount(async () => {
     unlisten = await onConnectionStatus((s) => connection.set(s));
@@ -25,7 +27,43 @@
       /* backend not ready yet; events will catch us up */
     }
   });
-  onDestroy(() => unlisten?.());
+  onDestroy(() => {
+    unlisten?.();
+    stopHeartbeat();
+  });
+
+  // While connected, ping the device so a silent unplug surfaces as a visible
+  // "lost connection" instead of stale data. Clear any prior loss on connect.
+  $: manageHeartbeat($connection.connected);
+  function manageHeartbeat(connected: boolean) {
+    if (connected) {
+      connectionError.set("");
+      if (!heartbeat) heartbeat = setInterval(pingOnce, 5000);
+    } else {
+      stopHeartbeat();
+    }
+  }
+  function stopHeartbeat() {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+  }
+  async function pingOnce() {
+    try {
+      const resp = await sendRequest({ op: "ping" });
+      if (!resp.ok) throw new Error(resp.error ?? "ping failed");
+    } catch {
+      const name = $connection.identity?.name ?? $connection.device?.name ?? "the controller";
+      stopHeartbeat();
+      connectionError.set(`Lost connection to ${name}.`);
+      try {
+        await disconnectDevice();
+      } catch {
+        connection.set({ connected: false });
+      }
+    }
+  }
 
   async function handleDisconnect() {
     try {
@@ -36,9 +74,9 @@
   }
 </script>
 
-<main>
+<div class="app">
   {#if !$connection.connected}
-    <Connect />
+    <main><Connect /></main>
   {:else}
     <header class="topbar">
       <div class="device">
@@ -49,15 +87,27 @@
           {#if $connection.identity?.firmware}· {$connection.identity.firmware}{/if}
         </span>
       </div>
-      <nav class="segmented">
-        <button class:active={view === "control"} on:click={() => (view = "control")}>Control</button>
-        <button class:active={view === "configure"} on:click={() => (view = "configure")}>Configure</button>
-        <button class:active={view === "json"} on:click={() => (view = "json")}>JSON</button>
+      <nav class="segmented" aria-label="Views">
+        <button
+          class:active={view === "control"}
+          aria-current={view === "control" ? "page" : undefined}
+          on:click={() => (view = "control")}>Control</button
+        >
+        <button
+          class:active={view === "configure"}
+          aria-current={view === "configure" ? "page" : undefined}
+          on:click={() => (view = "configure")}>Configure</button
+        >
+        <button
+          class:active={view === "json"}
+          aria-current={view === "json" ? "page" : undefined}
+          on:click={() => (view = "json")}>JSON</button
+        >
       </nav>
       <button class="disconnect" on:click={handleDisconnect}>Disconnect</button>
     </header>
 
-    <section class="content">
+    <main class="content">
       {#if view === "control"}
         <Control />
       {:else if view === "configure"}
@@ -65,15 +115,20 @@
       {:else}
         <JsonView />
       {/if}
-    </section>
+    </main>
   {/if}
-</main>
+</div>
 
 <style>
-  main {
+  .app {
     height: 100%;
     display: flex;
     flex-direction: column;
+  }
+  .app > main {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
   .topbar {
     display: flex;
@@ -113,9 +168,6 @@
     background: var(--panel-2);
   }
   .content {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
     padding: var(--s6) var(--s5);
   }
 </style>

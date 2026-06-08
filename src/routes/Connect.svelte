@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { scanDevices, connectDevice } from "../lib/transport";
   import { PROTOCOL_LABEL, type DeviceInfo } from "../lib/protocol";
+  import { connectionError } from "../lib/stores";
+  import { humanizeError } from "../lib/errors";
 
   let devices: DeviceInfo[] = [];
   let scanning = false;
@@ -39,7 +41,7 @@
       }
       error = "";
     } catch (e) {
-      if (!silent) error = String(e);
+      if (!silent) error = humanizeError(e);
     } finally {
       if (!silent) scanning = false;
     }
@@ -48,11 +50,12 @@
   async function connect(d: DeviceInfo) {
     connectingId = d.id;
     error = "";
+    connectionError.set(""); // clear any prior lost-connection banner
     try {
       await connectDevice(d);
       // On success the connection store flips and App swaps the view.
     } catch (e) {
-      error = String(e);
+      error = humanizeError(e);
     } finally {
       connectingId = null;
     }
@@ -76,6 +79,13 @@
     <p class="eyebrow">Hardware controller · choose a connection to begin</p>
   </header>
 
+  {#if $connectionError}
+    <div class="notice warn lost" role="status">
+      <span class="ic">⚠</span>
+      <span>{$connectionError} Scan to reconnect.</span>
+    </div>
+  {/if}
+
   <div class="toolbar">
     <button class="primary" on:click={() => scan()} disabled={scanning}>
       {scanning ? "Scanning…" : "Scan for devices"}
@@ -84,7 +94,10 @@
   </div>
 
   {#if error}
-    <p class="error">{error}</p>
+    <div class="notice err" role="alert">
+      <span class="ic">⚠</span>
+      <span>{error}</span>
+    </div>
   {/if}
 
   {#if devices.length === 0 && !scanning}
@@ -129,6 +142,9 @@
     max-width: 760px;
     margin: 0 auto;
     padding: var(--s8) var(--s4) var(--s5);
+  }
+  .lost {
+    margin-top: var(--s4);
   }
   .hero {
     padding-bottom: var(--s5);
