@@ -12,6 +12,12 @@
   let status = "";
   let statusOk = false;
   let loading = false;
+  let query = "";
+
+  $: filtered = query.trim()
+    ? names.filter((n) => n.toLowerCase().includes(query.trim().toLowerCase()))
+    : names;
+  $: editing = editorName !== "" || selected !== null;
 
   function template(k: EntityKind): unknown {
     if (k === "set") return { name: "", songs: [] };
@@ -94,6 +100,7 @@
     selected = null;
     editorName = "";
     editorJson = "";
+    query = "";
     refresh();
   }
 
@@ -118,57 +125,74 @@
         </button>
       {/each}
     </div>
-    <button class="primary newbtn" on:click={newItem}>+ New {kind}</button>
   </div>
 
   <div class="panes">
     <aside class="list panel">
-      <span class="eyebrow">{kind}s</span>
-      {#if loading}
-        <p class="muted hint">Loading…</p>
-      {:else if names.length === 0}
-        <div class="list-empty">
-          <p class="muted">No {kind}s yet.</p>
-          <button class="ghost" on:click={newItem}>+ New {kind}</button>
-        </div>
-      {/if}
-      <ul>
-        {#each names as name (name)}
-          <li class:active={selected === name}>
-            <button class="name" on:click={() => selectItem(name)}>{name}</button>
-            <button class="del" title="Delete" on:click={() => remove(name)} aria-label="Delete {name}">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12" />
-              </svg>
-            </button>
-          </li>
-        {/each}
-      </ul>
+      <input
+        class="search"
+        type="text"
+        bind:value={query}
+        placeholder="Filter {kind}s…"
+        aria-label="Filter {kind}s"
+      />
+      <div class="list-scroll">
+        {#if loading}
+          <p class="muted hint">Loading…</p>
+        {:else if names.length === 0}
+          <p class="muted hint">No {kind}s yet — create one.</p>
+        {:else if filtered.length === 0}
+          <p class="muted hint">No matches for “{query}”.</p>
+        {/if}
+        <ul>
+          {#each filtered as name (name)}
+            <li class:active={selected === name}>
+              <button class="name" on:click={() => selectItem(name)}>{name}</button>
+              <button
+                class="del"
+                title="Delete"
+                on:click={() => remove(name)}
+                aria-label="Delete {name}"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12" />
+                </svg>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+      <button class="add" on:click={newItem}>+ New {kind}</button>
     </aside>
 
-    <section class="editor panel">
-      <label>
-        <span class="eyebrow">Name</span>
-        <input type="text" bind:value={editorName} placeholder="{kind} name" />
-      </label>
-      <label class="jsonlabel">
-        <span class="eyebrow">Config · JSON</span>
-        <textarea bind:value={editorJson} rows="18" spellcheck="false"
-          placeholder="Select an item, or click “New {kind}”."></textarea>
-      </label>
-      <div class="actions">
-        <button class="primary" on:click={save} disabled={!editorJson.trim()}>Save {kind}</button>
+    <section class="detail panel">
+      {#if !editing}
+        <div class="detail-empty">
+          <p class="muted">Select a {kind} from the list, or create a new one.</p>
+        </div>
+      {:else}
+        <div class="detail-head">
+          <input class="title-input" bind:value={editorName} placeholder="{kind} name" aria-label="{kind} name" />
+          <span class="type-chip mono">{kind}</span>
+          <span class="grow"></span>
+          <button class="primary" on:click={save} disabled={!editorJson.trim()}>Save {kind}</button>
+        </div>
+        <label class="jsonlabel">
+          <span class="eyebrow">Config · JSON</span>
+          <textarea bind:value={editorJson} rows="16" spellcheck="false"
+            placeholder="Select an item, or click “New {kind}”."></textarea>
+        </label>
         <span class="status-msg" class:ok={statusOk} class:error={!statusOk} role="status" aria-live="polite">
           {status}
         </span>
-      </div>
+      {/if}
     </section>
   </div>
 </div>
 
 <style>
   .configure {
-    max-width: 940px;
+    max-width: 960px;
     margin: 0 auto;
   }
   .bar {
@@ -176,52 +200,37 @@
     align-items: center;
     margin-bottom: var(--s4);
   }
-  .newbtn {
-    margin-left: auto;
-  }
   .panes {
     display: grid;
-    grid-template-columns: 232px 1fr;
+    grid-template-columns: 248px 1fr;
     gap: var(--s4);
-    align-items: start;
+    align-items: stretch;
+    min-height: 460px;
   }
   .panel {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
-    padding: var(--s3);
   }
+
+  /* Master list */
   .list {
-    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    padding: var(--s2);
+    gap: var(--s2);
   }
-  .list .eyebrow {
-    display: block;
-    padding: var(--s1) var(--s2) var(--s2);
+  .search {
+    font-size: var(--t-sm);
+  }
+  .list-scroll {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
   }
   .hint {
     padding: var(--s2);
     font-size: var(--t-sm);
-  }
-  .list-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--s2);
-    padding: var(--s2);
-  }
-  .ghost {
-    background: transparent;
-    border: 1px dashed var(--line-strong);
-    color: var(--text-dim);
-    font-size: var(--t-sm);
-    padding: 0.4rem 0.6rem;
-  }
-  .ghost:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
-  }
-  .status-msg:empty {
-    display: none;
   }
   .list ul {
     list-style: none;
@@ -246,6 +255,9 @@
     padding: 0.5rem 0.55rem;
     border-radius: var(--r-sm);
     color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .list li.active .name {
     color: var(--accent);
@@ -266,24 +278,74 @@
     color: var(--danger);
     background: transparent;
   }
-  .editor {
+  .add {
+    background: transparent;
+    border: 1px dashed var(--line-strong);
+    color: var(--text-dim);
+    font-size: var(--t-sm);
+  }
+  .add:hover {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
+  /* Detail */
+  .detail {
     display: flex;
     flex-direction: column;
     gap: var(--s4);
     padding: var(--s4);
   }
-  label {
+  .detail-empty {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    color: var(--text-dim);
+    font-size: var(--t-sm);
+  }
+  .detail-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+  }
+  .title-input {
+    flex: 1;
+    font-family: var(--font-ui);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    padding: var(--s2) 0;
+  }
+  .title-input:focus-visible {
+    border-bottom-color: var(--accent);
+    box-shadow: none;
+  }
+  .type-chip {
+    font-size: var(--t-2xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px var(--s2);
+  }
+  .grow {
+    flex: 1;
+  }
+  .jsonlabel {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: var(--s2);
   }
-  .jsonlabel {
-    flex: 1;
+  .status-msg:empty {
+    display: none;
   }
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: var(--s4);
+  .status-msg {
     font-size: var(--t-sm);
   }
 </style>

@@ -71,84 +71,77 @@
 </script>
 
 <div class="connect">
-  <header class="hero">
+  <header class="head">
     <div class="brand">
       <span class="led amber"></span>
       <h1>MidiController</h1>
     </div>
-    <p class="eyebrow">Hardware controller · choose a connection to begin</p>
+    <p class="eyebrow">Choose a controller to connect</p>
   </header>
 
   {#if $connectionError}
-    <div class="notice warn lost" role="status">
-      <span class="ic">⚠</span>
-      <span>{$connectionError} Scan to reconnect.</span>
+    <div class="notice warn" role="status">
+      <span class="ic">⚠</span><span>{$connectionError} Scan to reconnect.</span>
     </div>
   {/if}
-
-  <div class="toolbar">
-    <button class="primary" on:click={() => scan()} disabled={scanning}>
-      {scanning ? "Scanning…" : "Scan for devices"}
-    </button>
-    <span class="status mono">{devices.length} found · Serial · USB · Wi-Fi/Ethernet soon</span>
-  </div>
-
   {#if error}
-    <div class="notice err" role="alert">
-      <span class="ic">⚠</span>
-      <span>{error}</span>
-    </div>
+    <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
   {/if}
 
-  {#if devices.length === 0 && !scanning}
-    <div class="empty">
-      <p class="empty-title">No devices found</p>
-      <p class="muted">Plug in the controller and scan again.</p>
-    </div>
-  {/if}
+  <div class="panel picker">
+    <ul class="devices">
+      {#each devices as d (d.id)}
+        <li class="row">
+          <span class="tile">
+            <span
+              class="device-img"
+              role="img"
+              aria-label={d.protocol}
+              style="mask-image:url({imageFor(d.image)});-webkit-mask-image:url({imageFor(d.image)})"
+            ></span>
+          </span>
+          <span class="meta">
+            <span class="name" title={d.name}>{d.name}</span>
+            <span class="sub mono">
+              <span class="proto">{PROTOCOL_LABEL[d.protocol]}</span>{#if d.identity} · fw {d.identity.firmware}{/if}
+            </span>
+          </span>
+          <button class="connect-btn" on:click={() => connect(d)} disabled={connectingId === d.id}>
+            {connectingId === d.id ? "Connecting…" : "Connect"}
+          </button>
+        </li>
+      {/each}
 
-  <ul class="device-grid">
-    {#each devices as d (d.id)}
-      <li class="device-card">
-        <span class="tile">
-          <span
-            class="device-img"
-            role="img"
-            aria-label={d.protocol}
-            style="mask-image:url({imageFor(d.image)});-webkit-mask-image:url({imageFor(d.image)})"
-          ></span>
-        </span>
-        <div class="device-meta">
-          <strong title={d.name}>{d.name}</strong>
-          <span class="proto eyebrow">{PROTOCOL_LABEL[d.protocol]}</span>
-          {#if d.identity}
-            <span class="fw mono">{d.identity.name} · {d.identity.firmware}</span>
-          {/if}
-        </div>
-        <button
-          class="connect-btn"
-          on:click={() => connect(d)}
-          disabled={connectingId === d.id}
-        >
-          {connectingId === d.id ? "Connecting…" : "Connect"}
-        </button>
-      </li>
-    {/each}
-  </ul>
+      {#if devices.length === 0}
+        <li class="empty">
+          <span class="pulse" class:on={scanning}></span>
+          <p class="empty-title">{scanning ? "Searching…" : "No devices found"}</p>
+          <p class="muted">
+            {scanning
+              ? "Looking for controllers on serial and USB."
+              : "Plug in the controller and scan again."}
+          </p>
+        </li>
+      {/if}
+    </ul>
+
+    <div class="toolbar">
+      <button class="primary" on:click={() => scan()} disabled={scanning}>
+        {scanning ? "Scanning…" : "Scan for devices"}
+      </button>
+      <span class="status mono">{devices.length} found · Serial · USB · Wi-Fi/Ethernet soon</span>
+    </div>
+  </div>
 </div>
 
 <style>
   .connect {
-    max-width: 760px;
+    max-width: 560px;
     margin: 0 auto;
     padding: var(--s8) var(--s4) var(--s5);
-  }
-  .lost {
-    margin-top: var(--s4);
-  }
-  .hero {
-    padding-bottom: var(--s5);
-    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
   }
   .brand {
     display: flex;
@@ -158,61 +151,37 @@
   .brand h1 {
     font-size: var(--t-2xl);
   }
-  .hero .eyebrow {
-    margin: var(--s3) 0 0;
-  }
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: var(--s4);
-    margin: var(--s5) 0 var(--s4);
-  }
-  .status {
-    font-size: var(--t-xs);
-    color: var(--text-dim);
-  }
-  .empty {
-    padding: var(--s6) 0;
-    text-align: center;
-  }
-  .empty-title {
-    margin: 0 0 var(--s1);
-    font-weight: 600;
-  }
-  .empty .muted {
-    margin: 0;
-    font-size: var(--t-sm);
-  }
-  .device-grid {
-    list-style: none;
-    padding: 0;
+  .head .eyebrow {
     margin: var(--s2) 0 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-    gap: var(--s3);
   }
-  .device-card {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
+
+  .panel {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
-    padding: var(--s3);
-    transition:
-      border-color 0.15s ease,
-      transform 0.1s ease,
-      background 0.15s ease;
+    overflow: hidden;
   }
-  .device-card:hover {
-    border-color: var(--line-strong);
+
+  .devices {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+    border-bottom: 1px solid var(--line);
+    transition: background 0.14s ease;
+  }
+  .row:hover {
     background: var(--panel-2);
-    transform: translateY(-1px);
   }
   .tile {
     flex: none;
-    width: 46px;
-    height: 46px;
+    width: 42px;
+    height: 42px;
     display: grid;
     place-items: center;
     background: var(--inset);
@@ -220,8 +189,8 @@
     border-radius: var(--r-md);
   }
   .device-img {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     background-color: var(--text-dim);
     mask-repeat: no-repeat;
     -webkit-mask-repeat: no-repeat;
@@ -229,30 +198,32 @@
     -webkit-mask-position: center;
     mask-size: contain;
     -webkit-mask-size: contain;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.14s ease;
   }
-  .device-card:hover .device-img {
+  .row:hover .device-img {
     background-color: var(--accent);
   }
-  .device-meta {
+  .meta {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
     flex: 1;
   }
-  .device-meta strong {
+  .name {
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-weight: 600;
+  }
+  .sub {
+    font-size: var(--t-2xs);
+    color: var(--text-dim);
   }
   .proto {
     color: var(--text-faint);
-  }
-  .fw {
-    font-size: var(--t-2xs);
-    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .connect-btn {
     flex: none;
@@ -265,5 +236,58 @@
     background: var(--accent);
     color: var(--accent-ink);
     border-color: transparent;
+  }
+
+  /* Empty / searching */
+  .empty {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s2);
+    padding: var(--s8) var(--s4);
+    text-align: center;
+  }
+  .empty-title {
+    margin: 0;
+    font-weight: 600;
+  }
+  .empty .muted {
+    margin: 0;
+    font-size: var(--t-sm);
+  }
+  .pulse {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--line-strong);
+    margin-bottom: var(--s2);
+  }
+  .pulse.on {
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--accent-soft);
+      opacity: 1;
+    }
+    50% {
+      box-shadow: 0 0 0 8px transparent;
+      opacity: 0.5;
+    }
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    padding: var(--s4);
+    background: var(--bg);
+  }
+  .status {
+    font-size: var(--t-2xs);
+    color: var(--text-dim);
   }
 </style>
