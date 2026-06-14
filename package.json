@@ -1,6 +1,6 @@
 {
   "name": "midicontroller-controller-app",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native desktop controller app for the MidiController (Tauri v2 + Svelte + TypeScript)",
   "type": "module",
   "scripts": {
