@@ -257,17 +257,17 @@
 </script>
 
 <div class="workbench">
-  <!-- ── Vertical icon rail ── -->
-  <nav class="rail" aria-label="Entity type">
+  <!-- ── Entity tabs (across the top) ── -->
+  <nav class="tabs" aria-label="Entity type">
     {#each KINDS as k}
       <button
-        class="rail-btn"
+        class="tab"
         class:active={kind === k.key}
         aria-current={kind === k.key ? "page" : undefined}
         title={k.label}
         on:click={() => switchKind(k.key)}
       >
-        <span class="rail-ic" aria-hidden="true">
+        <span class="tab-ic" aria-hidden="true">
           {#if k.key === "set"}
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" /><path d="M3 12l9 4.5L21 12" /><path d="M3 16.5 12 21l9-4.5" />
@@ -282,11 +282,12 @@
             </svg>
           {/if}
         </span>
-        <span class="rail-label">{k.label}</span>
+        <span class="tab-label">{k.label}</span>
       </button>
     {/each}
   </nav>
 
+  <div class="panes">
   <!-- ── Master list ── -->
   <aside class="list-col">
     <header class="list-head">
@@ -467,12 +468,13 @@
       </div>
     {/if}
   </section>
+  </div>
 </div>
 
 <style>
   .workbench {
-    display: grid;
-    grid-template-columns: 84px 268px 1fr;
+    display: flex;
+    flex-direction: column;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
@@ -482,48 +484,63 @@
     margin: 0 auto;
   }
 
-  /* ── Rail ── */
-  .rail {
+  /* ── Entity tabs (horizontal, across the top) ── */
+  .tabs {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: var(--s1);
-    padding: var(--s3) var(--s2);
+    padding: var(--s2) var(--s3);
     background: var(--bg);
-    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
   }
-  .rail-btn {
+  .tab {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 5px;
-    padding: var(--s3) var(--s1);
+    gap: var(--s2);
+    padding: 0.5rem 0.9rem;
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--r-md);
     color: var(--text-dim);
   }
-  .rail-btn:hover {
+  .tab:hover {
     background: var(--panel-2);
     color: var(--text);
     border-color: transparent;
   }
-  .rail-btn.active {
+  .tab.active {
     color: var(--accent);
     background: var(--accent-soft);
+    /* Left accent bar — identical to the sidebar's active item, so the two
+       indicators read the same instead of one bottom / one left. */
     box-shadow: inset 2px 0 0 var(--accent);
   }
-  .rail-ic {
+  .tab-ic {
     display: grid;
     place-items: center;
   }
-  .rail-label {
-    font-size: var(--t-2xs);
+  .tab-ic svg {
+    width: 18px;
+    height: 18px;
+  }
+  .tab-label {
+    font-size: var(--t-sm);
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Panes (list + detail) below the tabs ── */
+  .panes {
+    display: flex;
+    flex: 1;
+    min-height: 0;
   }
 
   /* ── List column ── */
   .list-col {
+    width: 268px;
+    flex: none;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--line);
@@ -619,6 +636,8 @@
 
   /* ── Detail column ── */
   .detail-col {
+    flex: 1;
+    min-width: 0;
     overflow: auto;
     padding: var(--s5);
     display: flex;

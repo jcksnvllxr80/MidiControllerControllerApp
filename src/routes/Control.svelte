@@ -104,7 +104,10 @@
     align-items: center;
     justify-content: center;
     gap: var(--s2);
-    min-height: 6rem;
+    /* Fixed display height — never grows/shrinks with the message (1–4 lines all
+       stay vertically centered in the same box). */
+    height: 182px;
+    overflow: hidden;
     background: var(--inset);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);

@@ -2,6 +2,9 @@
 //! This is what makes "scan to see which connection methods are available" a
 //! single call, and what a new link family (Wi-Fi, Ethernet) plugs into.
 
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
+
 use super::{
     mock::MockTransport, serial::SerialTransport, usb::UsbTransport, wifi::WifiTransport,
     DeviceIdentity, DeviceInfo, Protocol, Transport,
@@ -10,11 +13,15 @@ use super::{
 pub struct TransportRegistry {
     /// Whether the in-memory mock device is offered (dev convenience).
     include_mock: bool,
+    /// Probe result per candidate id, so a present device is opened/identified
+    /// once — not on every background scan (which would thrash the serial port).
+    /// Pruned when a candidate disappears, so unplug/replug re-probes.
+    identity_cache: Mutex<HashMap<String, Option<DeviceIdentity>>>,
 }
 
 impl TransportRegistry {
     pub fn new(include_mock: bool) -> Self {
-        Self { include_mock }
+        Self { include_mock, identity_cache: Mutex::new(HashMap::new()) }
     }
 
     pub fn with_defaults() -> Self {
@@ -33,16 +40,34 @@ impl TransportRegistry {
         candidates.extend(WifiTransport::new().discover());
         // Ethernet plugs in here once implemented.
 
+        // Probe each candidate once (cached), then prune cache for ones gone.
+        let mut cache = self.identity_cache.lock().unwrap();
+        let present: HashSet<String> = candidates.iter().map(|c| c.id.clone()).collect();
+        cache.retain(|id, _| present.contains(id));
+
         let mut confirmed: Vec<DeviceInfo> = Vec::new();
         for mut c in candidates {
-            match self.probe(&c) {
+            let result = match cache.get(&c.id) {
+                Some(cached) => cached.clone(),
+                None => {
+                    let r = self.probe(&c);
+                    cache.insert(c.id.clone(), r.clone());
+                    r
+                }
+            };
+            match result {
                 Some(identity) if identity.name == "MidiController" => {
                     c.identity = Some(identity);
                     confirmed.push(c);
                 }
-                _ => {} // didn't answer, or isn't a MidiController — drop it
+                Some(_) => {} // something answered, but it isn't a MidiController — drop it
+                // No reply: the candidate is already VID/mDNS-filtered to our
+                // family, so keep it visible (unconfirmed) rather than hiding the
+                // user's plugged-in device; the real connect identifies it.
+                None => confirmed.push(c),
             }
         }
+        drop(cache);
 
         // The in-memory mock is a trusted dev fixture — include without probing.
         if self.include_mock {

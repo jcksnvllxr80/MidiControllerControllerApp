@@ -8,13 +8,14 @@
     disconnectDevice,
     sendRequest,
   } from "./lib/transport";
-  import { PROTOCOL_LABEL } from "./lib/protocol";
   import Connect from "./routes/Connect.svelte";
   import Control from "./routes/Control.svelte";
   import Configure from "./routes/Configure.svelte";
   import JsonView from "./routes/JsonView.svelte";
   import Wifi from "./routes/Wifi.svelte";
   import Firmware from "./routes/Firmware.svelte";
+  import TitleBar from "./TitleBar.svelte";
+  import Sidebar from "./Sidebar.svelte";
 
   type View = "control" | "configure" | "json" | "wifi" | "firmware";
   let view: View = "control";
@@ -76,68 +77,41 @@
   }
 </script>
 
-<div class="app">
+<div class="shell">
+  <TitleBar />
+  <div class="app">
   {#if !$connection.connected}
     <main><Connect /></main>
   {:else}
-    <header class="topbar">
-      <div class="device">
-        <span class="led live" title="Connected"></span>
-        <strong>{$connection.identity?.name ?? $connection.device?.name ?? "Connected"}</strong>
-        <span class="device-meta mono">
-          {PROTOCOL_LABEL[$connection.device?.protocol ?? "mock"]}
-          {#if $connection.identity?.firmware}· {$connection.identity.firmware}{/if}
-        </span>
-      </div>
-      <nav class="segmented" aria-label="Views">
-        <button
-          class:active={view === "control"}
-          aria-current={view === "control" ? "page" : undefined}
-          on:click={() => (view = "control")}>Control</button
-        >
-        <button
-          class:active={view === "configure"}
-          aria-current={view === "configure" ? "page" : undefined}
-          on:click={() => (view = "configure")}>Configure</button
-        >
-        <button
-          class:active={view === "json"}
-          aria-current={view === "json" ? "page" : undefined}
-          on:click={() => (view = "json")}>JSON</button
-        >
-        <button
-          class:active={view === "wifi"}
-          aria-current={view === "wifi" ? "page" : undefined}
-          on:click={() => (view = "wifi")}>Wi-Fi</button
-        >
-        <button
-          class:active={view === "firmware"}
-          aria-current={view === "firmware" ? "page" : undefined}
-          on:click={() => (view = "firmware")}>Firmware</button
-        >
-      </nav>
-      <button class="disconnect" on:click={handleDisconnect}>Disconnect</button>
-    </header>
-
-    <main class="content">
-      {#if view === "control"}
-        <Control />
-      {:else if view === "configure"}
-        <Configure />
-      {:else if view === "json"}
-        <JsonView />
-      {:else if view === "wifi"}
-        <Wifi />
-      {:else}
-        <Firmware />
-      {/if}
-    </main>
+    <div class="workspace">
+      <Sidebar {view} onSelect={(v) => (view = v as View)} onDisconnect={handleDisconnect} />
+      <main class="content">
+        {#if view === "control"}
+          <Control />
+        {:else if view === "configure"}
+          <Configure />
+        {:else if view === "json"}
+          <JsonView />
+        {:else if view === "wifi"}
+          <Wifi />
+        {:else}
+          <Firmware />
+        {/if}
+      </main>
+    </div>
   {/if}
+  </div>
 </div>
 
 <style>
-  .app {
+  .shell {
     height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .app {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
@@ -146,44 +120,15 @@
     min-height: 0;
     overflow: auto;
   }
-  .topbar {
+  .workspace {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: center;
-    gap: var(--s4);
-    padding: var(--s3) var(--s4);
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
-  }
-  .device {
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    min-width: 0;
-  }
-  .device strong {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 600;
-  }
-  .device-meta {
-    font-size: var(--t-xs);
-    color: var(--text-dim);
-    white-space: nowrap;
-  }
-  nav {
-    margin-left: auto;
-  }
-  .disconnect {
-    font-size: var(--t-sm);
-    color: var(--text-dim);
-  }
-  .disconnect:hover {
-    border-color: var(--danger);
-    color: var(--danger);
-    background: var(--panel-2);
   }
   .content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
     padding: var(--s6) var(--s5);
   }
 </style>

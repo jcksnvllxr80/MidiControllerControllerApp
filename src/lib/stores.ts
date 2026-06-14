@@ -10,3 +10,21 @@ export const connection = writable<ConnectionStatus>({ connected: false });
  * race-clear the message before the user sees it.
  */
 export const connectionError = writable<string>("");
+
+/** Left sidebar collapsed (icons only) vs expanded (icons + labels). Persisted. */
+const SIDEBAR_KEY = "sidebarCollapsed";
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export const sidebarCollapsed = writable<boolean>(loadCollapsed());
+sidebarCollapsed.subscribe((v) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, v ? "1" : "0");
+  } catch {
+    /* no localStorage (SSR/test) — in-memory only */
+  }
+});

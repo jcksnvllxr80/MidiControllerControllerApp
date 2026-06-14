@@ -10,6 +10,7 @@
   import { PROTOCOL_LABEL, type DeviceInfo } from "../lib/protocol";
   import { connectionError } from "../lib/stores";
   import { humanizeError } from "../lib/errors";
+  import { pickFirmwareFile } from "../lib/dialog";
 
   let devices: DeviceInfo[] = [];
   let scanning = false;
@@ -66,9 +67,21 @@
     }
   }
 
+  async function browse() {
+    try {
+      const path = await pickFirmwareFile();
+      if (path) {
+        uf2Path = path;
+        flashErr = "";
+      }
+    } catch (e) {
+      flashErr = humanizeError(e);
+    }
+  }
+
   async function flash() {
     if (!uf2Path.trim()) {
-      flashErr = "Enter the path to your firmware .uf2.";
+      flashErr = "Choose your firmware .uf2 with Browse.";
       return;
     }
     flashing = true;
@@ -116,15 +129,6 @@
     <p class="eyebrow">Choose a controller to connect</p>
   </header>
 
-  {#if $connectionError}
-    <div class="notice warn" role="status">
-      <span class="ic">⚠</span><span>{$connectionError} Scan to reconnect.</span>
-    </div>
-  {/if}
-  {#if error}
-    <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
-  {/if}
-
   {#if bootloader}
     <div class="panel bootloader">
       <div class="bl-head">
@@ -136,14 +140,16 @@
         <span class="mono">.uf2</span> and flash.
       </p>
       <div class="bl-form">
+        <button class="browse" on:click={browse} disabled={flashing}>Browse…</button>
         <input
           type="text"
           bind:value={uf2Path}
-          placeholder={"…\\build-pico\\midicontroller_pico.uf2"}
+          placeholder={"Choose midicontroller_pico.uf2…"}
           aria-label="Firmware .uf2 path"
           spellcheck="false"
+          readonly
         />
-        <button class="primary" on:click={flash} disabled={flashing}>
+        <button class="primary" on:click={flash} disabled={flashing || !uf2Path}>
           {flashing ? "Flashing…" : "Flash"}
         </button>
       </div>
@@ -200,6 +206,17 @@
       <span class="status mono">{devices.length} found · Serial · USB · Wi-Fi/Ethernet soon</span>
     </div>
   </div>
+
+  <!-- Messages live BELOW the scan block so the device list never bounces when
+       one comes and goes. -->
+  {#if $connectionError}
+    <div class="notice warn" role="status">
+      <span class="ic">⚠</span><span>{$connectionError} Scan to reconnect.</span>
+    </div>
+  {/if}
+  {#if error}
+    <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
+  {/if}
 </div>
 
 <style>

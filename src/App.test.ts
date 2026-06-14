@@ -11,6 +11,7 @@ vi.mock("./lib/transport", () => ({
   sendRequest: vi.fn(() => Promise.resolve({ ok: true })),
   request: vi.fn(() => Promise.resolve(null)),
 }));
+vi.mock("./lib/dialog", () => ({ pickFirmwareFile: vi.fn(() => Promise.resolve(null)) }));
 
 import * as transport from "./lib/transport";
 import { connection } from "./lib/stores";
@@ -41,11 +42,10 @@ describe("App shell", () => {
     expect(await screen.findByRole("button", { name: /scan for devices/i })).toBeTruthy();
   });
 
-  it("shows the device toolbar + nav when connected", async () => {
+  it("shows the sidebar nav + disconnect when connected", async () => {
     t.fetchConnectionStatus.mockResolvedValue(connected);
     render(App);
-    expect(await screen.findByText("Mock MidiController")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Disconnect" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Configure" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "JSON" })).toBeTruthy();
   });
@@ -81,6 +81,6 @@ describe("App shell", () => {
     render(App);
     await screen.findByRole("button", { name: /scan for devices/i });
     push?.(connected);
-    expect(await screen.findByText("Mock MidiController")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Disconnect" })).toBeTruthy();
   });
 });

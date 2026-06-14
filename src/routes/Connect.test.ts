@@ -8,12 +8,16 @@ vi.mock("../lib/transport", () => ({
   findBootloader: vi.fn(),
   flashFirmware: vi.fn(),
 }));
+vi.mock("../lib/dialog", () => ({ pickFirmwareFile: vi.fn() }));
 
 import * as transport from "../lib/transport";
+import * as dialog from "../lib/dialog";
 import Connect from "./Connect.svelte";
 import type { DeviceInfo } from "../lib/protocol";
 
 const t = transport as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const d = dialog as unknown as { pickFirmwareFile: ReturnType<typeof vi.fn> };
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 const device: DeviceInfo = {
   id: "mock:0",
@@ -38,6 +42,7 @@ beforeEach(() => {
   t.onDeviceFound.mockReset().mockResolvedValue(() => {});
   t.findBootloader.mockReset().mockResolvedValue(null);
   t.flashFirmware.mockReset().mockResolvedValue("E:\\midicontroller_pico.uf2");
+  d.pickFirmwareFile.mockReset().mockResolvedValue(null);
 });
 
 describe("Connect screen", () => {
@@ -83,16 +88,26 @@ describe("Connect screen", () => {
     expect(await screen.findByText(/usb exploded/)).toBeTruthy();
   });
 
-  it("shows the bootloader flash card and flashes a .uf2", async () => {
+  it("Browse picks a .uf2 and Flash sends it", async () => {
     t.scanDevices.mockResolvedValue([]);
     t.findBootloader.mockResolvedValue({ mount_point: "E:\\", label: "RP2350" });
+    d.pickFirmwareFile.mockResolvedValue("C:\\fw\\midicontroller_pico.uf2");
     render(Connect);
     expect(await screen.findByText(/RP2350 bootloader/i)).toBeTruthy();
-    await fireEvent.input(screen.getByLabelText("Firmware .uf2 path"), {
-      target: { value: "C:\\fw\\midicontroller_pico.uf2" },
-    });
+    await fireEvent.click(screen.getByRole("button", { name: /browse/i }));
+    await flush();
+    expect(await screen.findByDisplayValue("C:\\fw\\midicontroller_pico.uf2")).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: /^flash$/i }));
     expect(t.flashFirmware).toHaveBeenCalledWith("C:\\fw\\midicontroller_pico.uf2");
     expect(await screen.findByText(/will reboot and reconnect/i)).toBeTruthy();
+  });
+
+  it("Flash without a chosen file shows a hint", async () => {
+    t.scanDevices.mockResolvedValue([]);
+    t.findBootloader.mockResolvedValue({ mount_point: "E:\\", label: "RP2350" });
+    render(Connect);
+    await screen.findByText(/RP2350 bootloader/i);
+    // Flash is disabled until a file is picked; calling browse that returns null keeps it disabled.
+    expect((screen.getByRole("button", { name: /^flash$/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

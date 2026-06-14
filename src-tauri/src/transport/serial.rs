@@ -16,12 +16,15 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Bound on noise/log lines skipped while waiting for a matching response.
 const MAX_SKIP_LINES: usize = 256;
 
-/// True only for a USB port belonging to one of our firmware builds: the default
-/// CDC build (RP2350 VID `0x2E8A`, product string "MidiController") or the
-/// raw-USB build (`0xCAFE`/`0x4001`). Discovery keeps only these, so we never
-/// open — let alone send bytes to — an unrelated COM port (Bluetooth, printers…).
+/// Worth probing as a controller port. Matches by **VID** — the RP2350/Pico VID
+/// `0x2E8A` (default CDC build) or our raw-USB vendor `0xCAFE`/`0x4001` — because
+/// the OS-reported product string is unreliable (Windows commonly shows
+/// "USB Serial Device" or nothing, not the USB iProduct). The `identify`
+/// handshake in discovery is the real confirmation that it's a MidiController.
+/// We still never open unrelated adapters (FTDI, Bluetooth SPP, printers…), which
+/// carry other VIDs. An explicit "MidiController" product string also qualifies.
 fn is_controller_usb(vid: u16, pid: u16, product: Option<&str>) -> bool {
-    (vid == 0x2E8A && product == Some("MidiController")) || (vid == 0xCAFE && pid == 0x4001)
+    vid == 0x2E8A || (vid == 0xCAFE && pid == 0x4001) || product == Some("MidiController")
 }
 
 pub struct SerialTransport {
@@ -161,13 +164,20 @@ mod tests {
     }
 
     #[test]
-    fn only_our_firmware_ports_pass_the_filter() {
-        assert!(is_controller_usb(0x2E8A, 0x000A, Some("MidiController"))); // CDC build
-        assert!(is_controller_usb(0xCAFE, 0x4001, None)); // raw-USB build
-        assert!(!is_controller_usb(0x2E8A, 0x000A, Some("Pico"))); // RPi VID, not ours
-        assert!(!is_controller_usb(0x2E8A, 0x000A, None)); // RPi VID, no product
-        assert!(!is_controller_usb(0x1234, 0x5678, Some("MidiController"))); // name only
-        assert!(!is_controller_usb(0xCAFE, 0x9999, None)); // our VID, wrong PID
+    fn controller_usb_filter_is_vid_based_with_product_fallback() {
+        // Our RP2350 CDC VID qualifies regardless of the (unreliable) product
+        // string — identify, not the label, is the real confirmation.
+        assert!(is_controller_usb(0x2E8A, 0x000A, Some("MidiController")));
+        assert!(is_controller_usb(0x2E8A, 0x000A, Some("USB Serial Device")));
+        assert!(is_controller_usb(0x2E8A, 0x0005, None));
+        // Raw-USB vendor build.
+        assert!(is_controller_usb(0xCAFE, 0x4001, None));
+        // Explicit product string still qualifies on an unusual VID.
+        assert!(is_controller_usb(0x1209, 0x0001, Some("MidiController")));
+        // Unrelated adapters (FTDI, etc.) are never probed.
+        assert!(!is_controller_usb(0x0403, 0x6001, Some("FT232R USB UART")));
+        assert!(!is_controller_usb(0x1234, 0x5678, None));
+        assert!(!is_controller_usb(0xCAFE, 0x9999, None));
     }
 
     #[test]
