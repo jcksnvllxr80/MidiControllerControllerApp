@@ -16,13 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The Rust backend links Tauri, which needs the WebKitGTK/GTK dev libs even
-      # just to compile `cargo test`.
-      - name: Install Tauri Linux deps
+      # Tauri needs the WebKitGTK/GTK dev libs to compile; `serialport` needs
+      # libudev (USB/serial port enumeration) — both required even for `cargo test`.
+      - name: Install Tauri + serialport Linux deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libudev-dev pkg-config
 
       - uses: actions/setup-node@v4
         with:
