@@ -1,9 +1,12 @@
 # MidiController Controller App: Web App → Native Desktop App
 
-> **Status:** Phases 0–2 implemented and building (Tauri v2 + Svelte + TS shell,
-> transport interface + JSON-lines protocol, Mock + Serial transports, USB
-> discovery). See [`../README.md`](../README.md) for the per-area status table.
-> Run with `npm install && npm run tauri dev`.
+> **Status:** Phases 0–4 done, plus the once-"future" Wi-Fi link and firmware update/reboot.
+> Shipped: Tauri v2 + Svelte 5 + TS shell, custom frameless title bar, collapsible sidebar,
+> the transport interface + JSON-lines protocol with **identify-confirm + dedupe-by-`device_id`**,
+> Mock / Serial / USB (raw vendor-WinUSB) / Wi-Fi transports, the full Sets/Songs/Pedals GUI
+> editor, and firmware flashing over the USB bootloader. **Next:** themes (Appearance).
+> [`../README.md`](../README.md) is the live per-area status table; this file is the design
+> rationale + roadmap. Run with `npm install && npm run tauri dev`.
 
 ## Context
 The MidiController system has three parts:
@@ -180,12 +183,13 @@ debuggable over a serial monitor), each request carrying a correlation `id`:
 | `POST /{type}/{name}` | `write_set` · `write_song` · `write_part` · `write_pedal` |
 | `POST /{type}/delete/{name}` | `delete_{type}` |
 | `GET /dpad/{dir}` · `/short/{btn}` | `dpad` · `short` |
-| — (new) | `identify` → `DeviceIdentity` (used by `probe`) |
+| — (new) | `identify` → `DeviceIdentity` (used by discovery's confirm step) |
+| — (device mgmt, added later) | `wifi_status` · `wifi_set` · `wifi_enable` · `reboot` · `reboot_bootloader` |
 
 The framing/codec is a small `protocol/codec.rs` so it can be swapped (length‑prefixed,
-COBS, CBOR) without touching transports or the UI. **This wire spec must match the
-firmware's `IConfigTransport`** — `docs/protocol.md` is the shared source of truth and is
-co‑designed with the firmware agent.
+COBS, CBOR) without touching transports or the UI. **This wire spec matches the firmware's
+`EditorProtocol`** — the agreed contract is `MidiControllerCpp/docs/wifi-app-handoff.md`,
+mirrored in `protocol/mod.rs` + `lib/protocol.ts` (a cross-language test enforces parity).
 
 ### Frontend (Svelte rewrite)
 
@@ -217,6 +221,10 @@ co‑designed with the firmware agent.
 ---
 
 ## Project layout (`MidiControllerControllerApp/`)
+
+> This is the *original planned* tree. It has since grown (TitleBar, Sidebar, Wifi/Firmware
+> views, `presets.ts`/`dialog.ts`/`window.ts`, `firmware.rs`, `transport/wifi.rs`) and `wifi.rs`
+> is no longer a stub. See [`../README.md`](../README.md) for the **current, accurate** layout.
 
 ```
 package.json · vite.config.ts · tsconfig.json   # Svelte + Vite + TS frontend
@@ -293,9 +301,15 @@ Reconnect/heartbeat polish, error surfacing, settings (remember last device, bau
 icon, and **installers** (MSI/NSIS on Windows; `.deb`/AppImage on Linux) via `tauri build`.
 Optional CI to build artifacts on tag.
 
-**Future — WiFi & Ethernet.**
-`wifi.rs` / `ethernet.rs` implement the same trait: discovery via mDNS/zeroconf, transport
-over TCP/WebSocket. No UI or core changes — that's the payoff of the interface.
+**Wi-Fi — DONE (was "future").**
+`transport/wifi.rs` implements the same trait: mDNS discovery (`_midicontroller._tcp`,
+`midicontroller.local`) + TCP `:8080`, reusing the same `codec`/`identify`. No UI or core
+changes were needed — the payoff of the interface. **Ethernet** remains a future same-trait add.
+
+**Also shipped beyond the original plan:** firmware update/reboot (`reboot` / `reboot_bootloader`
+ops + `firmware.rs` bootloader-drive flash + the Firmware view and Connect flash card), the
+custom title bar, and the collapsible sidebar (which replaced the top segmented nav). **Themes
+(Appearance)** is the next feature.
 
 ---
 
@@ -309,8 +323,8 @@ over TCP/WebSocket. No UI or core changes — that's the payoff of the interface
   Control/Configure/JSON flows are the acceptance checklist.
 
 ## Coordination with the firmware effort
-- `docs/protocol.md` is the **shared contract**; the firmware's `IConfigTransport` and this
-  app's `protocol/` must implement the same frames + `identify` handshake.
+- `MidiControllerCpp/docs/wifi-app-handoff.md` is the **shared contract**; the firmware's
+  `EditorProtocol` and this app's `protocol/` implement the same frames + `identify` handshake.
 - The firmware's **USB descriptor choice (CDC vs vendor)** decides whether `UsbTransport` is
   a distinct adapter or folds into `SerialTransport`.
 - The firmware already standardizes on **JSON** config (per its plan), so the wire payloads
@@ -332,13 +346,15 @@ over TCP/WebSocket. No UI or core changes — that's the payoff of the interface
 - **Transports:** build **both** `SerialTransport` and `UsbTransport` behind the trait; if
   the firmware turns out CDC‑only, `usb.rs` collapses to a stub.
 
-## Open questions (see chat)
-1. **USB descriptor:** once the firmware's USB is implemented, confirm CDC‑virtual‑COM vs
-   vendor/HID so we keep or stub `UsbTransport`. (Designing for both until then.)
-2. **Wire‑protocol ownership:** this app proposes `docs/protocol.md` now, wait for the
-   firmware's `IConfigTransport` spec, or co‑design?
-3. **Source UI confirmation:** `controllerWebApp` is assumed as the reference UI — confirm
-   it's the right one (vs the older `MidiControllerWebApp`).
+## Open questions — all resolved
+1. **USB descriptor** — RESOLVED. The default firmware enumerates as **USB-CDC** (reached via the
+   Serial transport); a separate **raw vendor/WinUSB** build (`-DMC_ENABLE_USB_EDITOR`,
+   VID `0xCAFE`/PID `0x4001`) pairs with `UsbTransport`. Both are implemented, so neither is a stub.
+2. **Wire-protocol ownership** — RESOLVED. The firmware owns it; the agreed contract is
+   `MidiControllerCpp/docs/wifi-app-handoff.md`, mirrored in `protocol/mod.rs` + `lib/protocol.ts`
+   (a cross-language test enforces parity).
+3. **Source UI** — RESOLVED. `controllerWebApp` was the design reference (the older
+   `MidiControllerWebApp` is a dead 2020 proxy).
 
 ## Design decisions — UI/UX (from /plan-design-review)
 

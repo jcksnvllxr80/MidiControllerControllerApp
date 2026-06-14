@@ -47,6 +47,15 @@ Surfaces layer by elevation, never by lightness flips.
 
 One accent. Amber is for the primary action and "this is active," nothing else.
 
+### Theming (planned)
+
+Because the whole UI reads from these tokens, a theme is just a different set of values applied
+via `:root[data-theme="…"]` — the amber/near-black above is the default. Planned named themes:
+**Dracula · Nord · Tokyo Night · Gruvbox** (dark) and **Solarized Light · Catppuccin Latte**
+(light), plus **match-OS**, picked from an Appearance view (a sidebar item) and persisted. Each
+remaps the same tokens (the accent shifts from amber to the theme's signature color); components
+don't change.
+
 ## Spacing & shape
 
 - Spacing scale on 4px base: `--s1 4` … `--s8 48`. No arbitrary pixel values.
@@ -56,9 +65,18 @@ One accent. Amber is for the primary action and "this is active," nothing else.
 
 - **Buttons** — `--control` surface, `--line` border; `.primary` = amber fill with
   dark ink. `focus-visible` shows a 2px amber ring (never `outline:none` alone).
-- **Segmented control** (`.segmented`) — nav + Configure tabs. Active segment lifts
-  to `--control` with amber text + `aria-current="page"`.
-- **LED dot** (`.led.live` / `.led.amber`) — connection + brand indicators.
+- **Sidebar** (`Sidebar.svelte`) — the primary nav: a collapsible left rail (56px icon-only
+  ⇄ 212px icon + label, toggled by a chevron centered on the border, state persisted). Active
+  item = `--accent-soft` + amber text + a **left accent bar** (`inset 2px 0 0 var(--accent)`) +
+  `aria-current="page"`.
+- **Title bar** (`TitleBar.svelte`) — custom frameless bar (`decorations:false`): brand
+  wordmark, a live connection pill (green dot + "Connected · <where>" / dim "Disconnected"),
+  and minimize / maximize / close controls (close → `--danger` on hover).
+- **Tabs** (`.tab`, the Configure Sets/Songs/Pedals switcher) — horizontal, and deliberately
+  uses the **same** active treatment as the sidebar item (accent-soft + amber + left accent
+  bar) so the two indicators read identically.
+- **LED dot** (`.led.live` / `.led.amber`) — `.live` (green) is the connection indicator (the
+  title-bar pill + the Control readout); `.amber` is the brand mark on the Connect screen.
 - **Notice** (`.notice.err` / `.notice.warn`) — designed error/status banners with
   an icon and `role="alert"`/`role="status"`. Replaces raw red exception text.
 - **LCD** — the Control display: `--inset` well, mono, amber text with a soft glow.
@@ -82,7 +100,8 @@ maps known transport failures to plain language with a next step.
 
 - Contrast: body/secondary text ≥ 4.5:1 (`--text-faint` is the floor at 5.3:1).
 - Landmarks: `<nav aria-label="Views">`, `<main>` for view content.
-- `aria-current="page"` on the active nav tab / segmented option.
+- `aria-current="page"` on the active sidebar item / Configure tab; sidebar buttons keep a
+  permanent `aria-label` so they stay reachable when collapsed to icons.
 - `focus-visible` ring on every interactive element; touch/click targets ≥ 40px.
 - Live regions: status/error use `role="alert"` / `aria-live="polite"`.
 - `prefers-reduced-motion`: transitions and hover lifts collapse to instant.

@@ -25,8 +25,18 @@ impl TransportRegistry {
     }
 
     pub fn with_defaults() -> Self {
-        // Mock is on by default for development; set MIDICTRL_NO_MOCK to hide it.
-        Self::new(std::env::var("MIDICTRL_NO_MOCK").is_err())
+        // The in-memory mock is a development aid, not something an end user should
+        // see. Default: ON in dev (debug) builds, OFF in release/installed builds.
+        // Override either way — MIDICTRL_MOCK=1 forces it on, MIDICTRL_NO_MOCK=1
+        // forces it off (NO_MOCK wins if both are set).
+        let include = if std::env::var("MIDICTRL_NO_MOCK").is_ok() {
+            false
+        } else if std::env::var("MIDICTRL_MOCK").is_ok() {
+            true
+        } else {
+            cfg!(debug_assertions)
+        };
+        Self::new(include)
     }
 
     /// Discover real controllers across all link families. Candidates from each

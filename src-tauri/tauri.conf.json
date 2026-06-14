@@ -28,6 +28,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.ico"]
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "shortDescription": "Configure and control the MidiController",
+    "longDescription": "Native desktop app to set up and play your MidiController over USB or Wi-Fi.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

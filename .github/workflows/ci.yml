@@ -1,0 +1,47 @@
+name: CI
+
+# Fast test/type gate on every commit to master. Building installers is a separate
+# workflow (release.yml), triggered by version tags.
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Rust backend links Tauri, which needs the WebKitGTK/GTK dev libs even
+      # just to compile `cargo test`.
+      - name: Install Tauri Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm ci
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Frontend tests (Vitest)
+        run: npm test
+
+      - name: Backend tests (cargo)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
