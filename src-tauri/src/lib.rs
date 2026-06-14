@@ -2,6 +2,7 @@
 
 mod commands;
 mod error;
+mod firmware;
 mod protocol;
 mod state;
 mod transport;
@@ -21,6 +22,8 @@ pub fn run() {
             commands::disconnect_device,
             commands::send_request,
             commands::connection_status,
+            commands::find_bootloader,
+            commands::flash_firmware,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

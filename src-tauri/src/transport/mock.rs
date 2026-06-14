@@ -42,6 +42,7 @@ impl MockTransport {
             name: "Mock MidiController".to_string(),
             firmware: "sim-0.1".to_string(),
             protocol_version: 1,
+            device_id: Some("MOCK-0001".to_string()),
         }
     }
 
@@ -154,7 +155,8 @@ impl Transport for MockTransport {
     fn request(&mut self, req: &Request) -> Result<Response> {
         let resp = match req {
             Request::Identify => Response::ok(json!({
-                "name": "Mock MidiController", "firmware": "sim-0.1", "protocol_version": 1
+                "name": "Mock MidiController", "firmware": "sim-0.1", "protocol_version": 1,
+                "device_id": "MOCK-0001"
             })),
             Request::Ping => Response::empty_ok(),
 
@@ -214,6 +216,9 @@ impl Transport for MockTransport {
                 self.wifi_ip = if self.wifi_connected { "192.168.1.50".to_string() } else { String::new() };
                 Response::ok(self.wifi_status())
             }
+
+            // The mock can't reboot; just ack (the real device drops the link).
+            Request::Reboot | Request::RebootBootloader => Response::empty_ok(),
         };
         Ok(resp)
     }

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { scanDevices, connectDevice } from "../lib/transport";
+  import {
+    scanDevices,
+    connectDevice,
+    findBootloader,
+    flashFirmware,
+    type BootloaderDrive,
+  } from "../lib/transport";
   import { PROTOCOL_LABEL, type DeviceInfo } from "../lib/protocol";
   import { connectionError } from "../lib/stores";
   import { humanizeError } from "../lib/errors";
@@ -10,6 +16,13 @@
   let connectingId: string | null = null;
   let error = "";
   let poll: ReturnType<typeof setInterval> | undefined;
+
+  // RP2350 bootloader (appears after "Update firmware"); poll alongside scans.
+  let bootloader: BootloaderDrive | null = null;
+  let uf2Path = "";
+  let flashing = false;
+  let flashMsg = "";
+  let flashErr = "";
 
   // Vite resolves the per-protocol device images at build time.
   const images = import.meta.glob("../assets/devices/*.svg", {
@@ -44,6 +57,30 @@
       if (!silent) error = humanizeError(e);
     } finally {
       if (!silent) scanning = false;
+    }
+    // Poll for the RP2350 bootloader drive too (present after Update firmware).
+    try {
+      bootloader = await findBootloader();
+    } catch {
+      /* command unavailable / no drive — leave as-is */
+    }
+  }
+
+  async function flash() {
+    if (!uf2Path.trim()) {
+      flashErr = "Enter the path to your firmware .uf2.";
+      return;
+    }
+    flashing = true;
+    flashErr = "";
+    flashMsg = "";
+    try {
+      const dest = await flashFirmware(uf2Path.trim());
+      flashMsg = `Flashed ${dest}. The controller will reboot and reconnect.`;
+    } catch (e) {
+      flashErr = humanizeError(e);
+    } finally {
+      flashing = false;
     }
   }
 
@@ -86,6 +123,37 @@
   {/if}
   {#if error}
     <div class="notice err" role="alert"><span class="ic">⚠</span><span>{error}</span></div>
+  {/if}
+
+  {#if bootloader}
+    <div class="panel bootloader">
+      <div class="bl-head">
+        <span class="led amber"></span>
+        <strong>RP2350 bootloader — ready to flash</strong>
+      </div>
+      <p class="muted bl-where">
+        Mounted at <span class="mono">{bootloader.mount_point}</span>. Point to your firmware
+        <span class="mono">.uf2</span> and flash.
+      </p>
+      <div class="bl-form">
+        <input
+          type="text"
+          bind:value={uf2Path}
+          placeholder={"…\\build-pico\\midicontroller_pico.uf2"}
+          aria-label="Firmware .uf2 path"
+          spellcheck="false"
+        />
+        <button class="primary" on:click={flash} disabled={flashing}>
+          {flashing ? "Flashing…" : "Flash"}
+        </button>
+      </div>
+      {#if flashErr}
+        <div class="notice err" role="alert"><span class="ic">⚠</span><span>{flashErr}</span></div>
+      {/if}
+      {#if flashMsg}
+        <div class="notice warn" role="status"><span class="ic">✓</span><span>{flashMsg}</span></div>
+      {/if}
+    </div>
   {/if}
 
   <div class="panel picker">
@@ -160,6 +228,33 @@
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
     overflow: hidden;
+  }
+
+  /* RP2350 bootloader flash card */
+  .bootloader {
+    border-color: var(--accent-line);
+    padding: var(--s4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+  .bl-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+  }
+  .bl-where {
+    margin: 0;
+    font-size: var(--t-sm);
+  }
+  .bl-form {
+    display: flex;
+    gap: var(--s2);
+  }
+  .bl-form input {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
   }
 
   .devices {

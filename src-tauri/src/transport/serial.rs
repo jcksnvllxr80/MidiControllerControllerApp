@@ -16,6 +16,14 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Bound on noise/log lines skipped while waiting for a matching response.
 const MAX_SKIP_LINES: usize = 256;
 
+/// True only for a USB port belonging to one of our firmware builds: the default
+/// CDC build (RP2350 VID `0x2E8A`, product string "MidiController") or the
+/// raw-USB build (`0xCAFE`/`0x4001`). Discovery keeps only these, so we never
+/// open — let alone send bytes to — an unrelated COM port (Bluetooth, printers…).
+fn is_controller_usb(vid: u16, pid: u16, product: Option<&str>) -> bool {
+    (vid == 0x2E8A && product == Some("MidiController")) || (vid == 0xCAFE && pid == 0x4001)
+}
+
 pub struct SerialTransport {
     conn: Option<Conn>,
 }
@@ -51,24 +59,27 @@ impl Transport for SerialTransport {
         };
         ports
             .into_iter()
-            .map(|p| {
-                let name = match &p.port_type {
-                    SerialPortType::UsbPort(info) => match info.product.as_deref() {
-                        Some(product) if !product.is_empty() => {
-                            format!("{} — {}", p.port_name, product)
-                        }
-                        _ => format!("{} (USB serial)", p.port_name),
-                    },
-                    _ => p.port_name.clone(),
+            .filter_map(|p| {
+                // A MidiController is always a USB CDC port matching our VID/product.
+                let info = match &p.port_type {
+                    SerialPortType::UsbPort(info) => info,
+                    _ => return None,
                 };
-                DeviceInfo {
+                if !is_controller_usb(info.vid, info.pid, info.product.as_deref()) {
+                    return None;
+                }
+                let name = match info.product.as_deref() {
+                    Some(product) if !product.is_empty() => format!("{} — {}", p.port_name, product),
+                    _ => format!("{} (USB serial)", p.port_name),
+                };
+                Some(DeviceInfo {
                     id: format!("serial:{}", p.port_name),
                     protocol: Protocol::Serial,
                     name,
                     image: Protocol::Serial.image_key().into(),
                     address: Address::Port { name: p.port_name.clone(), baud: DEFAULT_BAUD },
                     identity: None,
-                }
+                })
             })
             .collect()
     }
@@ -147,6 +158,16 @@ mod tests {
         let t = SerialTransport::new();
         assert!(!t.is_connected());
         assert_eq!(t.protocol(), Protocol::Serial);
+    }
+
+    #[test]
+    fn only_our_firmware_ports_pass_the_filter() {
+        assert!(is_controller_usb(0x2E8A, 0x000A, Some("MidiController"))); // CDC build
+        assert!(is_controller_usb(0xCAFE, 0x4001, None)); // raw-USB build
+        assert!(!is_controller_usb(0x2E8A, 0x000A, Some("Pico"))); // RPi VID, not ours
+        assert!(!is_controller_usb(0x2E8A, 0x000A, None)); // RPi VID, no product
+        assert!(!is_controller_usb(0x1234, 0x5678, Some("MidiController"))); // name only
+        assert!(!is_controller_usb(0xCAFE, 0x9999, None)); // our VID, wrong PID
     }
 
     #[test]

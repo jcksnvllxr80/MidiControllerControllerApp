@@ -25,6 +25,7 @@ thiserror = "1"
 anyhow = "1"
 log = "0.4"
 mdns-sd = "0.20"
+sysinfo = "0.33"
 
 [features]
 # DO NOT REMOVE: used by `tauri build`.

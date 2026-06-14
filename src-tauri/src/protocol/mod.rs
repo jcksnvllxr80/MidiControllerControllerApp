@@ -50,6 +50,12 @@ pub enum Request {
         password: Option<String>,
     },
     WifiEnable { on: bool },
+
+    /// Soft restart into the app.
+    Reboot,
+    /// Reset into the USB BOOTSEL mass-storage bootloader for flashing. The
+    /// firmware acks, then drops the link ~100ms later — the drop is success.
+    RebootBootloader,
 }
 
 /// The firmware's reply. `data` is op-specific JSON; on failure `error` is set.
@@ -110,8 +116,10 @@ mod tests {
             (Request::WifiStatus, "wifi_status"),
             (Request::WifiSet { ssid: "n".into(), password: Some("p".into()) }, "wifi_set"),
             (Request::WifiEnable { on: true }, "wifi_enable"),
+            (Request::Reboot, "reboot"),
+            (Request::RebootBootloader, "reboot_bootloader"),
         ];
-        assert_eq!(cases.len(), 21, "every Request variant must be covered");
+        assert_eq!(cases.len(), 23, "every Request variant must be covered");
         for (req, expected) in &cases {
             assert_eq!(&op_of(req), expected);
         }
@@ -217,8 +225,10 @@ mod more_tests {
             (r#"{"op":"wifi_set","ssid":"a","password":"b"}"#, |r| matches!(r, Request::WifiSet { .. })),
             (r#"{"op":"wifi_set","ssid":"a"}"#, |r| matches!(r, Request::WifiSet { password: None, .. })),
             (r#"{"op":"wifi_enable","on":true}"#, |r| matches!(r, Request::WifiEnable { on: true })),
+            (r#"{"op":"reboot"}"#, |r| matches!(r, Request::Reboot)),
+            (r#"{"op":"reboot_bootloader"}"#, |r| matches!(r, Request::RebootBootloader)),
         ];
-        assert_eq!(cases.len(), 22);
+        assert_eq!(cases.len(), 24);
         for (raw, pred) in cases {
             let req: Request = serde_json::from_str(raw).unwrap();
             assert!(pred(&req), "wrong variant for {raw}");

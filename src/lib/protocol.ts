@@ -7,6 +7,8 @@ export interface DeviceIdentity {
   name: string;
   firmware: string;
   protocol_version: number;
+  /** Stable per-unit id (same over USB and WiFi); absent on older firmware. */
+  device_id?: string;
 }
 
 export type Address =
@@ -59,7 +61,9 @@ export type Request =
   | { op: "short"; button: string }
   | { op: "wifi_status" }
   | { op: "wifi_set"; ssid: string; password?: string }
-  | { op: "wifi_enable"; on: boolean };
+  | { op: "wifi_enable"; on: boolean }
+  | { op: "reboot" }
+  | { op: "reboot_bootloader" };
 
 /** `data` returned by the wifi_* ops. */
 export interface WifiStatus {

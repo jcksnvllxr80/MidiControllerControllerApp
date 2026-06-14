@@ -4,7 +4,7 @@
 
 use super::{
     mock::MockTransport, serial::SerialTransport, usb::UsbTransport, wifi::WifiTransport,
-    DeviceInfo, Protocol, Transport,
+    DeviceIdentity, DeviceInfo, Protocol, Transport,
 };
 
 pub struct TransportRegistry {
@@ -22,17 +22,44 @@ impl TransportRegistry {
         Self::new(std::env::var("MIDICTRL_NO_MOCK").is_err())
     }
 
-    /// Enumerate candidate devices across all link families.
+    /// Discover real controllers across all link families. Candidates from each
+    /// transport are pre-filtered to our VID/PID(/mDNS service), confirmed by an
+    /// `identify` handshake (so only true MidiControllers survive), and merged by
+    /// `device_id` so one physical unit seen on USB *and* WiFi is a single entry.
     pub fn discover_all(&self) -> Vec<DeviceInfo> {
-        let mut out = Vec::new();
-        out.extend(SerialTransport::new().discover());
-        out.extend(UsbTransport::new().discover());
-        out.extend(WifiTransport::new().discover());
+        let mut candidates = Vec::new();
+        candidates.extend(SerialTransport::new().discover());
+        candidates.extend(UsbTransport::new().discover());
+        candidates.extend(WifiTransport::new().discover());
         // Ethernet plugs in here once implemented.
-        if self.include_mock {
-            out.extend(MockTransport::new().discover());
+
+        let mut confirmed: Vec<DeviceInfo> = Vec::new();
+        for mut c in candidates {
+            match self.probe(&c) {
+                Some(identity) if identity.name == "MidiController" => {
+                    c.identity = Some(identity);
+                    confirmed.push(c);
+                }
+                _ => {} // didn't answer, or isn't a MidiController — drop it
+            }
         }
-        out
+
+        // The in-memory mock is a trusted dev fixture — include without probing.
+        if self.include_mock {
+            confirmed.extend(MockTransport::new().discover());
+        }
+
+        dedupe_by_device_id(confirmed)
+    }
+
+    /// Open a candidate, run `identify`, and close. Used only to confirm/identify
+    /// during discovery; the real session reconnects on demand. Candidates are
+    /// already VID/PID-filtered, so this never touches an unrelated port.
+    fn probe(&self, device: &DeviceInfo) -> Option<DeviceIdentity> {
+        let mut t = self.make_transport(device.protocol)?;
+        let identity = t.connect(device).ok();
+        let _ = t.disconnect();
+        identity
     }
 
     /// Build a fresh, unconnected transport for a device's protocol.
@@ -52,6 +79,43 @@ impl Default for TransportRegistry {
     fn default() -> Self {
         Self::with_defaults()
     }
+}
+
+/// Merge devices that are the same physical unit (equal `device_id`) seen on
+/// multiple transports into one entry, preferring a wired link (serial > usb >
+/// wifi) — it's more reliable and is what firmware flashing needs. A device with
+/// no `device_id` (older firmware) can't be matched, so it's kept as-is.
+pub fn dedupe_by_device_id(devices: Vec<DeviceInfo>) -> Vec<DeviceInfo> {
+    fn rank(p: Protocol) -> u8 {
+        match p {
+            Protocol::Serial => 0,
+            Protocol::Usb => 1,
+            Protocol::Wifi => 2,
+            Protocol::Ethernet => 3,
+            Protocol::Mock => 4,
+        }
+    }
+    fn device_id_of(d: &DeviceInfo) -> Option<&str> {
+        d.identity.as_ref().and_then(|i| i.device_id.as_deref())
+    }
+
+    let mut out: Vec<DeviceInfo> = Vec::new();
+    for d in devices {
+        match device_id_of(&d) {
+            Some(id) => {
+                let id = id.to_string();
+                if let Some(existing) = out.iter_mut().find(|e| device_id_of(e) == Some(id.as_str())) {
+                    if rank(d.protocol) < rank(existing.protocol) {
+                        *existing = d; // a more-preferred transport for the same unit
+                    }
+                } else {
+                    out.push(d);
+                }
+            }
+            None => out.push(d),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -98,6 +162,55 @@ mod tests {
     fn make_transport_none_for_unimplemented() {
         let reg = TransportRegistry::new(true);
         assert!(reg.make_transport(Protocol::Ethernet).is_none());
+    }
+
+    fn dev(protocol: Protocol, device_id: Option<&str>, id: &str) -> DeviceInfo {
+        DeviceInfo {
+            id: id.into(),
+            protocol,
+            name: "MidiController".into(),
+            image: "x".into(),
+            address: crate::transport::Address::Mock,
+            identity: Some(DeviceIdentity {
+                name: "MidiController".into(),
+                firmware: "1".into(),
+                protocol_version: 1,
+                device_id: device_id.map(str::to_string),
+            }),
+        }
+    }
+
+    #[test]
+    fn dedupe_merges_same_unit_across_transports_preferring_wired() {
+        let out = dedupe_by_device_id(vec![
+            dev(Protocol::Wifi, Some("UNIT-A"), "wifi:a"),
+            dev(Protocol::Serial, Some("UNIT-A"), "serial:a"),
+            dev(Protocol::Usb, Some("UNIT-B"), "usb:b"),
+        ]);
+        assert_eq!(out.len(), 2, "UNIT-A's two transports collapse to one");
+        let unit_a = out
+            .iter()
+            .find(|d| d.identity.as_ref().unwrap().device_id.as_deref() == Some("UNIT-A"))
+            .unwrap();
+        assert_eq!(unit_a.protocol, Protocol::Serial, "wired preferred over wifi");
+    }
+
+    #[test]
+    fn dedupe_keeps_devices_without_a_device_id_separate() {
+        let out = dedupe_by_device_id(vec![
+            dev(Protocol::Serial, None, "serial:x"),
+            dev(Protocol::Serial, None, "serial:y"),
+        ]);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn dedupe_keeps_distinct_units() {
+        let out = dedupe_by_device_id(vec![
+            dev(Protocol::Serial, Some("A"), "serial:a"),
+            dev(Protocol::Wifi, Some("B"), "wifi:b"),
+        ]);
+        assert_eq!(out.len(), 2);
     }
 
     #[test]

@@ -83,6 +83,11 @@ pub struct DeviceIdentity {
     pub name: String,
     pub firmware: String,
     pub protocol_version: u16,
+    /// Stable per-physical-unit id (RP2350 board id), identical over USB and
+    /// WiFi — used to dedupe one unit seen on multiple transports. Optional for
+    /// older firmware that predates it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
 }
 
 /// The one interface every link family implements.
@@ -199,10 +204,24 @@ mod tests {
             name: "MidiController".into(),
             firmware: "1.2.3".into(),
             protocol_version: 1,
+            device_id: Some("E66...0042".into()),
         };
         let back: DeviceIdentity = serde_json::from_value(serde_json::to_value(&id).unwrap()).unwrap();
         assert_eq!(back.name, "MidiController");
         assert_eq!(back.protocol_version, 1);
+        assert_eq!(back.device_id.as_deref(), Some("E66...0042"));
+    }
+
+    #[test]
+    fn device_identity_device_id_is_optional() {
+        // Older firmware omits device_id; it must still deserialize (-> None).
+        let id: DeviceIdentity =
+            serde_json::from_str(r#"{"name":"MidiController","firmware":"1.0","protocol_version":1}"#)
+                .unwrap();
+        assert!(id.device_id.is_none());
+        // And when None, it's omitted from the wire form.
+        let v = serde_json::to_value(&id).unwrap();
+        assert!(v.get("device_id").is_none());
     }
 }
 
@@ -238,6 +257,7 @@ mod more_tests {
                 name: "n".into(),
                 firmware: "f".into(),
                 protocol_version: 2,
+                device_id: None,
             }),
         };
         let v = serde_json::to_value(&d).unwrap();

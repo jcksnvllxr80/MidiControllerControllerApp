@@ -31,6 +31,22 @@ export function fetchConnectionStatus(): Promise<ConnectionStatus> {
   return invoke<ConnectionStatus>("connection_status");
 }
 
+/** The RP2350 UF2 bootloader drive, when one is mounted. */
+export interface BootloaderDrive {
+  mount_point: string;
+  label: string;
+}
+
+/** Look for the RP2350 bootloader drive (present after a reboot_bootloader). */
+export function findBootloader(): Promise<BootloaderDrive | null> {
+  return invoke<BootloaderDrive | null>("find_bootloader");
+}
+
+/** Flash a .uf2 by copying it onto the bootloader drive; returns the dest path. */
+export function flashFirmware(uf2Path: string): Promise<string> {
+  return invoke<string>("flash_firmware", { uf2Path });
+}
+
 export function onDeviceFound(cb: (d: DeviceInfo) => void): Promise<UnlistenFn> {
   return listen<DeviceInfo>("device-found", (e) => cb(e.payload));
 }

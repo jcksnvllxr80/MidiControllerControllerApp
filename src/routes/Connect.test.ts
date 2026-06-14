@@ -5,6 +5,8 @@ vi.mock("../lib/transport", () => ({
   scanDevices: vi.fn(),
   connectDevice: vi.fn(),
   onDeviceFound: vi.fn(),
+  findBootloader: vi.fn(),
+  flashFirmware: vi.fn(),
 }));
 
 import * as transport from "../lib/transport";
@@ -34,6 +36,8 @@ beforeEach(() => {
   t.scanDevices.mockReset().mockResolvedValue([device]);
   t.connectDevice.mockReset().mockResolvedValue({ connected: true });
   t.onDeviceFound.mockReset().mockResolvedValue(() => {});
+  t.findBootloader.mockReset().mockResolvedValue(null);
+  t.flashFirmware.mockReset().mockResolvedValue("E:\\midicontroller_pico.uf2");
 });
 
 describe("Connect screen", () => {
@@ -77,5 +81,18 @@ describe("Connect screen", () => {
     t.scanDevices.mockRejectedValue(new Error("usb exploded"));
     render(Connect);
     expect(await screen.findByText(/usb exploded/)).toBeTruthy();
+  });
+
+  it("shows the bootloader flash card and flashes a .uf2", async () => {
+    t.scanDevices.mockResolvedValue([]);
+    t.findBootloader.mockResolvedValue({ mount_point: "E:\\", label: "RP2350" });
+    render(Connect);
+    expect(await screen.findByText(/RP2350 bootloader/i)).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText("Firmware .uf2 path"), {
+      target: { value: "C:\\fw\\midicontroller_pico.uf2" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: /^flash$/i }));
+    expect(t.flashFirmware).toHaveBeenCalledWith("C:\\fw\\midicontroller_pico.uf2");
+    expect(await screen.findByText(/will reboot and reconnect/i)).toBeTruthy();
   });
 });

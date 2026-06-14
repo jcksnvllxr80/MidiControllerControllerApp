@@ -14,8 +14,9 @@
   import Configure from "./routes/Configure.svelte";
   import JsonView from "./routes/JsonView.svelte";
   import Wifi from "./routes/Wifi.svelte";
+  import Firmware from "./routes/Firmware.svelte";
 
-  type View = "control" | "configure" | "json" | "wifi";
+  type View = "control" | "configure" | "json" | "wifi" | "firmware";
   let view: View = "control";
   let unlisten: UnlistenFn | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -109,6 +110,11 @@
           aria-current={view === "wifi" ? "page" : undefined}
           on:click={() => (view = "wifi")}>Wi-Fi</button
         >
+        <button
+          class:active={view === "firmware"}
+          aria-current={view === "firmware" ? "page" : undefined}
+          on:click={() => (view = "firmware")}>Firmware</button
+        >
       </nav>
       <button class="disconnect" on:click={handleDisconnect}>Disconnect</button>
     </header>
@@ -120,8 +126,10 @@
         <Configure />
       {:else if view === "json"}
         <JsonView />
-      {:else}
+      {:else if view === "wifi"}
         <Wifi />
+      {:else}
+        <Firmware />
       {/if}
     </main>
   {/if}

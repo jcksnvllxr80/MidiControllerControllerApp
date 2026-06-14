@@ -56,3 +56,22 @@ pub async fn send_request(
 pub async fn connection_status(state: State<'_, AppState>) -> Result<ConnectionStatus, AppError> {
     Ok(state.status())
 }
+
+/// Look for the RP2350 UF2 bootloader drive (present after `reboot_bootloader`).
+#[tauri::command]
+pub async fn find_bootloader() -> Option<crate::firmware::BootloaderDrive> {
+    crate::firmware::find_bootloader()
+}
+
+/// Flash a `.uf2` by copying it onto the bootloader drive. Requires the device
+/// to be in bootloader mode (USB), regardless of how it was connected.
+#[tauri::command]
+pub async fn flash_firmware(uf2_path: String) -> Result<String, AppError> {
+    let drive = crate::firmware::find_bootloader().ok_or_else(|| {
+        AppError::Internal(
+            "No RP2350 bootloader drive found — put the device in bootloader mode (Update firmware) and plug in USB."
+                .into(),
+        )
+    })?;
+    crate::firmware::flash_uf2(&uf2_path, &drive.mount_point).map_err(AppError::Internal)
+}
