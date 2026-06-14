@@ -16,13 +16,16 @@
   import Firmware from "./routes/Firmware.svelte";
   import TitleBar from "./TitleBar.svelte";
   import Sidebar from "./Sidebar.svelte";
+  import { appVersion } from "./lib/app";
 
   type View = "control" | "configure" | "json" | "wifi" | "firmware";
   let view: View = "control";
   let unlisten: UnlistenFn | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let version = "";
 
   onMount(async () => {
+    appVersion().then((v) => (version = v));
     unlisten = await onConnectionStatus((s) => connection.set(s));
     try {
       connection.set(await fetchConnectionStatus());
@@ -101,6 +104,7 @@
     </div>
   {/if}
   </div>
+  {#if version}<span class="app-version mono">v{version}</span>{/if}
 </div>
 
 <style>
@@ -130,5 +134,17 @@
     min-height: 0;
     overflow: auto;
     padding: var(--s6) var(--s5);
+  }
+  /* Inconspicuous version readout, pinned to the bottom-right of the window. */
+  .app-version {
+    position: fixed;
+    right: 10px;
+    bottom: 6px;
+    font-size: var(--t-2xs);
+    color: var(--text-faint);
+    opacity: 0.55;
+    pointer-events: none;
+    user-select: none;
+    z-index: 5;
   }
 </style>

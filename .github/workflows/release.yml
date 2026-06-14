@@ -1,19 +1,138 @@
 name: Release
 
-# Build native installers for every OS and attach them to a GitHub Release.
-# Trigger by pushing a version tag, e.g.:
-#     npm version patch        # bumps package.json + tags vX.Y.Z
-#     git push --follow-tags
-# (or run manually from the Actions tab via "Run workflow").
+# Release flow — nothing special to run, just normal git:
+#   1. Bump "version" in package.json (e.g. 0.1.0 -> 0.1.1).
+#   2. Commit it with your own message and `git push` to master like any other change.
+#
+# On every push to master that touches a build-relevant file, this compares the "version"
+# in package.json against the previous commit. If it CHANGED, the pipeline runs:
+#   check -> test -> create draft Release -> build installers for every OS into it -> publish
+# If the tests or ANY build fail, the draft Release is deleted and nothing ships.
+# If the version didn't change, the whole thing no-ops (ordinary commits don't release).
+# There are no tags to manage — the decision is purely package.json's version. (GitHub
+# auto-stamps the published Release with a vX.Y.Z label; you never create or push it.)
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
+    branches: [master]
+    # Don't even start the pipeline for changes that can't affect a build (docs, etc.).
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitattributes'
+      - '.editorconfig'
+  workflow_dispatch: {} # manual button: release the current package.json version
+
+permissions:
+  contents: write # create/update/delete the Release + tag, upload installers
 
 jobs:
+  # 1. Release only when package.json's "version" changed in this push.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      should_release: ${{ steps.v.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the previous commit to compare package.json versions
+      - name: Decide whether the version changed
+        id: v
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # A manual run from the Actions tab always releases the current version.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Manual release of v$VERSION."
+            exit 0
+          fi
+
+          # Compare package.json's version before vs after this push.
+          BEFORE="${{ github.event.before }}"
+          PREV="none"
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$BEFORE:package.json" 2>/dev/null; then
+            git show "$BEFORE:package.json" > prev_package.json
+            PREV=$(node -p "require('./prev_package.json').version")
+            rm -f prev_package.json
+          fi
+
+          if [ "$VERSION" != "$PREV" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::package.json version changed ($PREV -> $VERSION) — releasing."
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::package.json version unchanged ($VERSION) — no release."
+          fi
+
+  # 2. Gate: the release only proceeds if the full suite passes.
+  test:
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri + serialport Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libudev-dev pkg-config
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  # 3. Tests passed — create ONE draft Release up front (avoids a matrix race), output its id.
+  create-release:
+    needs: [check, test]
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.mk.outputs.result }}
+    steps:
+      - name: Create the draft Release
+        id: mk
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const version = '${{ needs.check.outputs.version }}';
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${version}`,
+              target_commitish: context.sha,
+              name: `MidiController Controller v${version}`,
+              body: [
+                'Download the installer for your operating system below:',
+                '- **Windows** — the `…-setup.exe` (double-click, click through the wizard).',
+                '- **macOS** — the `.dmg` (open it, drag the app to Applications). Pick the build matching your chip (Apple Silicon vs Intel).',
+                '- **Linux** — the `.deb` (double-click to install) or the portable `.AppImage`.',
+                '',
+                "> Installers aren't code-signed yet, so the first launch shows an OS warning (Windows SmartScreen → \"More info → Run anyway\"; macOS → right-click → Open).",
+              ].join('\n'),
+              draft: true,
+              prerelease: false,
+            });
+            return String(data.id);
+
+  # 4. Build installers for every OS and upload them into the draft Release.
   build:
-    permissions:
-      contents: write # needed to create the Release and upload installers
+    needs: [check, create-release]
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +173,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Build app + installers, attach to a draft Release
+      - name: Build app + installers, upload into the draft Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,17 +188,26 @@ jobs:
           # Windows (Authenticode → no SmartScreen warning): set
           # bundle.windows.certificateThumbprint (+ optional signCommand) in tauri.conf.json.
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MidiController Controller ${{ github.ref_name }}'
-          releaseBody: |
-            Download the installer for your operating system below:
-            - **Windows** — the `…-setup.exe` (double-click, click through the wizard).
-            - **macOS** — the `.dmg` (open it, drag the app to Applications). Pick the build
-              matching your chip (Apple Silicon vs Intel).
-            - **Linux** — the `.deb` (double-click to install) or the portable `.AppImage`.
-
-            > Installers aren't code-signed yet, so the first launch shows an OS warning
-            > (Windows SmartScreen → "More info → Run anyway"; macOS → right-click → Open).
-          releaseDraft: true # review, then publish from the Releases page
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  # 5. Everything green -> publish the draft. Anything red -> delete the draft (nothing ships).
+  publish:
+    needs: [check, create-release, build]
+    if: always() && needs.create-release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish on success, delete the draft on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release_id = Number('${{ needs.create-release.outputs.release_id }}');
+            const buildResult = '${{ needs.build.result }}';
+            const owner = context.repo.owner, repo = context.repo.repo;
+            if (buildResult === 'success') {
+              await github.rest.repos.updateRelease({ owner, repo, release_id, draft: false, make_latest: 'true' });
+              core.notice('All tests + builds passed — release published.');
+            } else {
+              await github.rest.repos.deleteRelease({ owner, repo, release_id });
+              core.setFailed(`Build result was '${buildResult}' — draft Release deleted, nothing published.`);
+            }

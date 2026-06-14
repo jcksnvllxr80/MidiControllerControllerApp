@@ -150,20 +150,39 @@ cargo build [--release] --manifest-path src-tauri/Cargo.toml   # backend only, n
 
 Two GitHub Actions workflows live in `.github/workflows/`:
 
-- **`ci.yml`** — runs `svelte-check`, the frontend tests, and `cargo test` on every commit to `master`.
-- **`release.yml`** — on a version tag, builds installers for **Windows, macOS (Intel +
-  Apple Silicon), and Linux** in parallel and attaches them to a **draft GitHub Release**.
+Both ignore doc-only changes (`**/*.md`, `docs/**`, `LICENSE`, …) via `paths-ignore`, so editing
+the README or docs never spins up a test run or a build.
 
-Cut a release without owning a Mac or Linux box:
+- **`ci.yml`** — runs `svelte-check`, the frontend tests, and `cargo test` on every code commit to `master`.
+- **`release.yml`** — on every code push to `master`, compares the `version` in `package.json`
+  against the previous commit. If it **changed**, it runs a pipeline:
+  `check → test → create draft → build (Windows, macOS Intel + Apple Silicon, Linux) → publish`.
+  If the tests **and** all four builds pass, the draft is **published automatically** (and marked
+  the latest release). If the tests or any build **fail**, the draft is **deleted** and nothing
+  ships. If the version didn't change, the whole thing no-ops — ordinary commits don't release.
+
+**Cutting a release is just normal git** — no special commands, no `npm`, no tags to push or
+manage, and no manual "Publish" click. The only trigger is the version *changing*:
 
 ```bash
-npm version patch        # bumps the version and creates a vX.Y.Z tag
-git push --follow-tags   # pushing the tag triggers release.yml
+# 1. Bump the version in package.json by hand, e.g. "version": "0.1.0" -> "0.1.1"
+# 2. Commit it with your own message and push, like any other change:
+git commit -am "Release 0.1.1: <what changed>"
+git push    # -> tests run, installers build, and (if all green) the Release publishes itself
 ```
 
-Then review the draft Release on GitHub and click **Publish**. (You can also trigger it
-manually from the Actions tab.) Installers are unsigned for now — `release.yml` has commented
-placeholders for the macOS/Windows signing secrets to drop in once you have certificates.
+That's the whole ritual — push and walk away. (You can also trigger a release of the current
+version manually from the Actions tab via **Run workflow**.)
+
+**Versioning is single-source:** `package.json` holds the version and `tauri.conf.json` reads
+it (`"version": "../package.json"`), so the version you type there flows to the **installer**
+filename, the in-app corner label, and the auto-created Release — all in lockstep. You never
+create or push a git tag yourself; when the Release publishes, GitHub stamps it with the
+matching `vX.Y.Z` tag automatically. (`Cargo.toml`'s `version` is just the Rust crate's and
+doesn't affect the app/installer.)
+
+Installers are unsigned for now — `release.yml` has commented placeholders for the
+macOS/Windows signing secrets to drop in once you have certificates.
 
 ## Test
 

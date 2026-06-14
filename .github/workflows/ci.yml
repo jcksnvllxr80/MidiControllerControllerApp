@@ -1,10 +1,18 @@
 name: CI
 
-# Fast test/type gate on every commit to master. Building installers is a separate
-# workflow (release.yml), triggered by version tags.
+# Fast test/type gate on every commit to master that touches code. Building installers
+# is a separate workflow (release.yml), triggered when package.json's version changes.
 on:
   push:
     branches: [master]
+    # Skip the run for changes that can't affect tests/build (docs, etc.).
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitattributes'
+      - '.editorconfig'
 
 concurrency:
   group: ci-${{ github.ref }}
