@@ -134,12 +134,12 @@ mod tests {
         MockTransport::new().discover().pop().expect("mock discovers one device")
     }
 
-    fn wifi_device() -> DeviceInfo {
+    fn ethernet_device() -> DeviceInfo {
         DeviceInfo {
-            id: "wifi:0".into(),
-            protocol: Protocol::Wifi,
+            id: "ethernet:0".into(),
+            protocol: Protocol::Ethernet,
             name: "future".into(),
-            image: "wifi".into(),
+            image: "ethernet".into(),
             address: Address::Net { host: "10.0.0.5".into(), port: 80 },
             identity: None,
         }
@@ -204,8 +204,8 @@ mod tests {
     #[test]
     fn connect_unsupported_protocol_errors() {
         let s = AppState::new();
-        match s.connect(wifi_device()) {
-            Err(AppError::Unsupported(p)) => assert_eq!(p, "Wi-Fi"),
+        match s.connect(ethernet_device()) {
+            Err(AppError::Unsupported(p)) => assert_eq!(p, "Ethernet"),
             other => panic!("expected Unsupported, got {other:?}"),
         }
         assert!(!s.status().connected);

@@ -3,8 +3,8 @@
 //! single call, and what a new link family (Wi-Fi, Ethernet) plugs into.
 
 use super::{
-    mock::MockTransport, serial::SerialTransport, usb::UsbTransport, DeviceInfo, Protocol,
-    Transport,
+    mock::MockTransport, serial::SerialTransport, usb::UsbTransport, wifi::WifiTransport,
+    DeviceInfo, Protocol, Transport,
 };
 
 pub struct TransportRegistry {
@@ -27,7 +27,8 @@ impl TransportRegistry {
         let mut out = Vec::new();
         out.extend(SerialTransport::new().discover());
         out.extend(UsbTransport::new().discover());
-        // Wi-Fi / Ethernet transports plug in here once implemented.
+        out.extend(WifiTransport::new().discover());
+        // Ethernet plugs in here once implemented.
         if self.include_mock {
             out.extend(MockTransport::new().discover());
         }
@@ -39,9 +40,10 @@ impl TransportRegistry {
         match protocol {
             Protocol::Serial => Some(Box::new(SerialTransport::new())),
             Protocol::Usb => Some(Box::new(UsbTransport::new())),
+            Protocol::Wifi => Some(Box::new(WifiTransport::new())),
             Protocol::Mock => Some(Box::new(MockTransport::new())),
             // Same trait, not yet implemented.
-            Protocol::Wifi | Protocol::Ethernet => None,
+            Protocol::Ethernet => None,
         }
     }
 }
@@ -70,11 +72,12 @@ mod tests {
 
     #[test]
     fn discovered_devices_are_all_well_formed() {
-        // Across serial + usb + mock, ids carry a protocol prefix and never panic.
+        // Across serial + usb + wifi + mock, ids carry a protocol prefix and never panic.
         for d in TransportRegistry::new(true).discover_all() {
             assert!(
                 d.id.starts_with("serial:")
                     || d.id.starts_with("usb:")
+                    || d.id.starts_with("wifi:")
                     || d.id.starts_with("mock:"),
                 "unexpected id {}",
                 d.id
@@ -87,13 +90,13 @@ mod tests {
         let reg = TransportRegistry::new(true);
         assert!(reg.make_transport(Protocol::Serial).is_some());
         assert!(reg.make_transport(Protocol::Usb).is_some());
+        assert!(reg.make_transport(Protocol::Wifi).is_some());
         assert!(reg.make_transport(Protocol::Mock).is_some());
     }
 
     #[test]
     fn make_transport_none_for_unimplemented() {
         let reg = TransportRegistry::new(true);
-        assert!(reg.make_transport(Protocol::Wifi).is_none());
         assert!(reg.make_transport(Protocol::Ethernet).is_none());
     }
 

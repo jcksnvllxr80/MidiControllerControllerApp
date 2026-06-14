@@ -9,6 +9,7 @@ pub mod mock;
 pub mod registry;
 pub mod serial;
 pub mod usb;
+pub mod wifi;
 
 pub use registry::TransportRegistry;
 

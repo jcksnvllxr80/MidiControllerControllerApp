@@ -39,6 +39,17 @@ pub enum Request {
     Dpad { direction: String },
     /// Live control: short button press (`1`..`5`).
     Short { button: String },
+
+    /// WiFi setup, carried over USB or TCP. `data` is the status object
+    /// (`enabled`/`connected`/`ssid`/`ip`).
+    WifiStatus,
+    WifiSet {
+        ssid: String,
+        /// Omitted for open networks.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
+    },
+    WifiEnable { on: bool },
 }
 
 /// The firmware's reply. `data` is op-specific JSON; on failure `error` is set.
@@ -96,8 +107,11 @@ mod tests {
             (Request::DeletePedal { name: "a".into() }, "delete_pedal"),
             (Request::Dpad { direction: "up".into() }, "dpad"),
             (Request::Short { button: "1".into() }, "short"),
+            (Request::WifiStatus, "wifi_status"),
+            (Request::WifiSet { ssid: "n".into(), password: Some("p".into()) }, "wifi_set"),
+            (Request::WifiEnable { on: true }, "wifi_enable"),
         ];
-        assert_eq!(cases.len(), 18, "every Request variant must be covered");
+        assert_eq!(cases.len(), 21, "every Request variant must be covered");
         for (req, expected) in &cases {
             assert_eq!(&op_of(req), expected);
         }
@@ -199,8 +213,12 @@ mod more_tests {
             (r#"{"op":"delete_pedal","name":"a"}"#, |r| matches!(r, Request::DeletePedal { .. })),
             (r#"{"op":"dpad","direction":"up"}"#, |r| matches!(r, Request::Dpad { .. })),
             (r#"{"op":"short","button":"1"}"#, |r| matches!(r, Request::Short { .. })),
+            (r#"{"op":"wifi_status"}"#, |r| matches!(r, Request::WifiStatus)),
+            (r#"{"op":"wifi_set","ssid":"a","password":"b"}"#, |r| matches!(r, Request::WifiSet { .. })),
+            (r#"{"op":"wifi_set","ssid":"a"}"#, |r| matches!(r, Request::WifiSet { password: None, .. })),
+            (r#"{"op":"wifi_enable","on":true}"#, |r| matches!(r, Request::WifiEnable { on: true })),
         ];
-        assert_eq!(cases.len(), 18);
+        assert_eq!(cases.len(), 22);
         for (raw, pred) in cases {
             let req: Request = serde_json::from_str(raw).unwrap();
             assert!(pred(&req), "wrong variant for {raw}");

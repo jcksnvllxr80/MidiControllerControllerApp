@@ -15,6 +15,10 @@ pub struct MockTransport {
     sets: BTreeMap<String, Value>,
     songs: BTreeMap<String, Value>,
     pedals: BTreeMap<String, Value>,
+    wifi_enabled: bool,
+    wifi_connected: bool,
+    wifi_ssid: String,
+    wifi_ip: String,
 }
 
 impl MockTransport {
@@ -24,6 +28,10 @@ impl MockTransport {
             sets: BTreeMap::new(),
             songs: BTreeMap::new(),
             pedals: BTreeMap::new(),
+            wifi_enabled: false,
+            wifi_connected: false,
+            wifi_ssid: String::new(),
+            wifi_ip: String::new(),
         };
         t.seed();
         t
@@ -95,6 +103,15 @@ impl MockTransport {
             Some(v) => Response::ok(v.clone()),
             None => Response::err(format!("no {kind} '{name}'")),
         }
+    }
+
+    fn wifi_status(&self) -> Value {
+        json!({
+            "enabled": self.wifi_enabled,
+            "connected": self.wifi_connected,
+            "ssid": self.wifi_ssid,
+            "ip": self.wifi_ip,
+        })
     }
 }
 
@@ -181,6 +198,21 @@ impl Transport for MockTransport {
             }
             Request::Short { button } => {
                 Response::ok(json!({ "display_message": format!("BUTTON {button} - mock device") }))
+            }
+
+            Request::WifiStatus => Response::ok(self.wifi_status()),
+            Request::WifiSet { ssid, password: _ } => {
+                self.wifi_ssid = ssid.clone();
+                self.wifi_enabled = true;
+                self.wifi_connected = true;
+                self.wifi_ip = "192.168.1.50".to_string();
+                Response::ok(self.wifi_status())
+            }
+            Request::WifiEnable { on } => {
+                self.wifi_enabled = *on;
+                self.wifi_connected = *on && !self.wifi_ssid.is_empty();
+                self.wifi_ip = if self.wifi_connected { "192.168.1.50".to_string() } else { String::new() };
+                Response::ok(self.wifi_status())
             }
         };
         Ok(resp)

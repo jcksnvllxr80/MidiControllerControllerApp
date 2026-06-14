@@ -56,7 +56,18 @@ export type Request =
   | { op: "delete_part"; name: string }
   | { op: "delete_pedal"; name: string }
   | { op: "dpad"; direction: string }
-  | { op: "short"; button: string };
+  | { op: "short"; button: string }
+  | { op: "wifi_status" }
+  | { op: "wifi_set"; ssid: string; password?: string }
+  | { op: "wifi_enable"; on: boolean };
+
+/** `data` returned by the wifi_* ops. */
+export interface WifiStatus {
+  enabled: boolean;
+  connected: boolean;
+  ssid: string;
+  ip: string;
+}
 
 // The three config entity kinds, and their op names, for the Configure manager.
 export type EntityKind = "set" | "song" | "pedal";
