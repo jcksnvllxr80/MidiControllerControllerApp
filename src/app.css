@@ -67,6 +67,146 @@
   text-rendering: optimizeLegibility;
 }
 
+/* ============================================================================
+   Themes. Each block remaps the same tokens (surfaces, text, the single accent,
+   status) — type/spacing/radius are inherited from :root. Scoped on the bare
+   attribute (not :root) so a swatch element can self-theme for previews. The
+   "studio" default is :root itself, applied by removing the attribute.
+   ========================================================================== */
+[data-theme="dracula"] {
+  --bg: #282a36;
+  --panel: #2d2f3d;
+  --panel-2: #343746;
+  --control: #3b3e50;
+  --inset: #21222c;
+  --line: #44475a;
+  --line-strong: #565a73;
+  --text: #f8f8f2;
+  --text-dim: #b8bacf;
+  --text-faint: #9a9cb3;
+  --accent: #bd93f9;
+  --accent-press: #a87fe0;
+  --accent-ink: #1a1024;
+  --accent-soft: rgba(189, 147, 249, 0.15);
+  --accent-line: rgba(189, 147, 249, 0.4);
+  --live: #50fa7b;
+  --live-soft: rgba(80, 250, 123, 0.14);
+  --danger: #ff5555;
+  color-scheme: dark;
+}
+
+[data-theme="nord"] {
+  --bg: #2e3440;
+  --panel: #353c4a;
+  --panel-2: #3b4252;
+  --control: #434c5e;
+  --inset: #272c36;
+  --line: #434c5e;
+  --line-strong: #4c566a;
+  --text: #eceff4;
+  --text-dim: #c2cad6;
+  --text-faint: #a6b0bf;
+  --accent: #88c0d0;
+  --accent-press: #6fa8b8;
+  --accent-ink: #0c1418;
+  --accent-soft: rgba(136, 192, 208, 0.15);
+  --accent-line: rgba(136, 192, 208, 0.4);
+  --live: #a3be8c;
+  --live-soft: rgba(163, 190, 140, 0.16);
+  --danger: #bf616a;
+  color-scheme: dark;
+}
+
+[data-theme="tokyo-night"] {
+  --bg: #1a1b26;
+  --panel: #1f2335;
+  --panel-2: #24283b;
+  --control: #2a2e42;
+  --inset: #16161e;
+  --line: #2f344d;
+  --line-strong: #414868;
+  --text: #c0caf5;
+  --text-dim: #9aa5ce;
+  --text-faint: #7f88b3;
+  --accent: #7aa2f7;
+  --accent-press: #6690e8;
+  --accent-ink: #0a0f1f;
+  --accent-soft: rgba(122, 162, 247, 0.15);
+  --accent-line: rgba(122, 162, 247, 0.4);
+  --live: #9ece6a;
+  --live-soft: rgba(158, 206, 106, 0.15);
+  --danger: #f7768e;
+  color-scheme: dark;
+}
+
+[data-theme="gruvbox"] {
+  --bg: #282828;
+  --panel: #32302f;
+  --panel-2: #3c3836;
+  --control: #45403d;
+  --inset: #1d2021;
+  --line: #504945;
+  --line-strong: #665c54;
+  --text: #ebdbb2;
+  --text-dim: #c4b596;
+  --text-faint: #a89984;
+  --accent: #fabd2f;
+  --accent-press: #e6a516;
+  --accent-ink: #1d1a0a;
+  --accent-soft: rgba(250, 189, 47, 0.14);
+  --accent-line: rgba(250, 189, 47, 0.38);
+  --live: #b8bb26;
+  --live-soft: rgba(184, 187, 38, 0.16);
+  --danger: #fb4934;
+  color-scheme: dark;
+}
+
+[data-theme="solarized-light"] {
+  --bg: #fdf6e3;
+  --panel: #f4eeda;
+  --panel-2: #eee8d5;
+  --control: #e7e1cd;
+  --inset: #fffbf0;
+  --line: #ddd6c1;
+  --line-strong: #c9c2ad;
+  --text: #586e75;
+  --text-dim: #657b83;
+  --text-faint: #7c8a8a;
+  --accent: #b58900;
+  --accent-press: #9c7500;
+  --accent-ink: #fffbf0;
+  --accent-soft: rgba(181, 137, 0, 0.13);
+  --accent-line: rgba(181, 137, 0, 0.42);
+  --live: #859900;
+  --live-soft: rgba(133, 153, 0, 0.16);
+  --danger: #dc322f;
+  --shadow: 0 10px 30px rgba(88, 110, 117, 0.18);
+  color-scheme: light;
+}
+
+[data-theme="catppuccin-latte"] {
+  --bg: #eff1f5;
+  --panel: #e6e9ef;
+  --panel-2: #dce0e8;
+  --control: #d2d6e0;
+  --inset: #f5f7fa;
+  --line: #ccd0da;
+  --line-strong: #bcc0cc;
+  --text: #4c4f69;
+  --text-dim: #5c5f77;
+  --text-faint: #6c6f85;
+  --accent: #8839ef;
+  --accent-press: #7a2fd8;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(136, 57, 239, 0.12);
+  --accent-line: rgba(136, 57, 239, 0.4);
+  --live: #40a02b;
+  --live-soft: rgba(64, 160, 43, 0.15);
+  --danger: #d20f39;
+  --shadow: 0 10px 30px rgba(76, 79, 105, 0.16);
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }

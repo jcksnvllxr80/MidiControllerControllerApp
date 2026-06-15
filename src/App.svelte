@@ -14,11 +14,12 @@
   import JsonView from "./routes/JsonView.svelte";
   import Wifi from "./routes/Wifi.svelte";
   import Firmware from "./routes/Firmware.svelte";
+  import Appearance from "./routes/Appearance.svelte";
   import TitleBar from "./TitleBar.svelte";
   import Sidebar from "./Sidebar.svelte";
   import { appVersion } from "./lib/app";
 
-  type View = "control" | "configure" | "json" | "wifi" | "firmware";
+  type View = "control" | "configure" | "json" | "wifi" | "firmware" | "appearance";
   let view: View = "control";
   let unlisten: UnlistenFn | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -97,8 +98,10 @@
           <JsonView />
         {:else if view === "wifi"}
           <Wifi />
-        {:else}
+        {:else if view === "firmware"}
           <Firmware />
+        {:else}
+          <Appearance />
         {/if}
       </main>
     </div>

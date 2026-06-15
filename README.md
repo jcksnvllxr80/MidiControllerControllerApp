@@ -244,7 +244,7 @@ The 23-op wire contract is asserted from **both** languages, so any Rust↔TS dr
 | Control · JSON view | ✅ working |
 | Wi-Fi setup (`wifi_set` / `wifi_status` / `wifi_enable`) | ✅ working |
 | Firmware update + reboot (`reboot` / `reboot_bootloader`, bootloader-drive flash) | ✅ implemented (flash unverified on hardware) |
-| **Themes / Appearance** (Dracula, Nord, Tokyo Night, Gruvbox, Solarized Light, Catppuccin Latte, match-OS) | 🚧 planned — next |
+| **Themes / Appearance** (Studio default + Dracula, Nord, Tokyo Night, Gruvbox, Solarized Light, Catppuccin Latte, Match-OS) | ✅ working (Appearance sidebar view; persisted; live remap of `app.css` tokens) |
 | Ethernet transport | ⛔ not started (same trait, future) |
 
 ## Notes / coordination

@@ -12,6 +12,7 @@
     { key: "json", label: "JSON" },
     { key: "wifi", label: "Wi-Fi" },
     { key: "firmware", label: "Firmware" },
+    { key: "appearance", label: "Appearance" },
   ];
 
   const toggle = () => sidebarCollapsed.update((v) => !v);
@@ -37,8 +38,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4c-1.6 0-2.4.9-2.4 2.4v2.2c0 1-.5 1.4-1.6 1.4 1.1 0 1.6.4 1.6 1.4v2.2C5.6 17.1 6.4 18 8 18" /><path d="M16 4c1.6 0 2.4.9 2.4 2.4v2.2c0 1 .5 1.4 1.6 1.4-1.1 0-1.6.4-1.6 1.4v2.2C18.4 17.1 17.6 18 16 18" /></svg>
           {:else if it.key === "wifi"}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a13 13 0 0 1 16 0" /><path d="M7 12.5a8 8 0 0 1 10 0" /><path d="M9.7 15.7a4 4 0 0 1 4.6 0" /><circle cx="12" cy="18.6" r="0.7" fill="currentColor" /></svg>
-          {:else}
+          {:else if it.key === "firmware"}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5" /><rect x="10" y="10" width="4" height="4" rx="0.5" /><line x1="9.5" y1="4" x2="9.5" y2="7" /><line x1="14.5" y1="4" x2="14.5" y2="7" /><line x1="9.5" y1="17" x2="9.5" y2="20" /><line x1="14.5" y1="17" x2="14.5" y2="20" /><line x1="4" y1="9.5" x2="7" y2="9.5" /><line x1="4" y1="14.5" x2="7" y2="14.5" /><line x1="17" y1="9.5" x2="20" y2="9.5" /><line x1="17" y1="14.5" x2="20" y2="14.5" /></svg>
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" /><circle cx="8.5" cy="9.5" r="1.1" fill="currentColor" stroke="none" /><circle cx="15.5" cy="9.5" r="1.1" fill="currentColor" stroke="none" /><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" /><path d="M12 20.5c1.4 0 2-1 2-1.9 0-1.3-1.3-1.6-1.3-2.6 0-.9.8-1.5 1.8-1.5" /></svg>
           {/if}
         </span>
         {#if !$sidebarCollapsed}<span class="label">{it.label}</span>{/if}

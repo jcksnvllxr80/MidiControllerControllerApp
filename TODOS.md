@@ -31,9 +31,9 @@ items were fixed in-line; these are polish). See `DESIGN.md` for the system.
 
 - Mobile/touch is explicitly **out of scope** — this is a fixed desktop window
   (Tauri, min 720×560). Don't add hamburger nav or mobile breakpoints.
-- **Next feature (not design debt):** themes / Appearance — a theme picker (Dracula,
-  Nord, Tokyo Night, Gruvbox, Solarized Light, Catppuccin Latte, match-OS) added as a
-  6th sidebar item, mapped onto the `src/app.css` tokens. Tracked in the README status
-  table + `docs/plan.md`.
+- **Themes / Appearance — shipped.** Theme picker (Studio default + Dracula, Nord,
+  Tokyo Night, Gruvbox, Solarized Light, Catppuccin Latte, Match-OS) as a 6th sidebar
+  item (`src/routes/Appearance.svelte`), remapping the `src/app.css` tokens, persisted
+  via `src/lib/theme.ts`. Match-OS follows `prefers-color-scheme`.
 - USB connect/request are **implemented** (raw vendor/WinUSB, pairs with the firmware's
   `-DMC_ENABLE_USB_EDITOR` build) — the earlier "stub pending USB descriptor" note is resolved.

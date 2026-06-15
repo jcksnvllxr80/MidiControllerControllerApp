@@ -47,14 +47,17 @@ Surfaces layer by elevation, never by lightness flips.
 
 One accent. Amber is for the primary action and "this is active," nothing else.
 
-### Theming (planned)
+### Theming
 
 Because the whole UI reads from these tokens, a theme is just a different set of values applied
-via `:root[data-theme="…"]` — the amber/near-black above is the default. Planned named themes:
-**Dracula · Nord · Tokyo Night · Gruvbox** (dark) and **Solarized Light · Catppuccin Latte**
-(light), plus **match-OS**, picked from an Appearance view (a sidebar item) and persisted. Each
-remaps the same tokens (the accent shifts from amber to the theme's signature color); components
-don't change.
+via `[data-theme="…"]` — the amber/near-black above is the default ("Studio"), applied as the bare
+`:root` by *removing* the attribute. Named themes: **Dracula · Nord · Tokyo Night · Gruvbox** (dark)
+and **Solarized Light · Catppuccin Latte** (light), plus **Match-OS** (follows
+`prefers-color-scheme`, swapping Studio ⇄ Solarized Light). Picked from the **Appearance** view (a
+sidebar item) and persisted to `localStorage`. Each remaps the same tokens (the accent shifts from
+amber to the theme's signature color) — components don't change. Tokens live in `src/app.css`; the
+store + persistence + OS-follow logic in `src/lib/theme.ts`. The scope is the bare attribute (not
+`:root`) so the Appearance preview swatches can self-theme via a nested `data-theme`.
 
 ## Spacing & shape
 

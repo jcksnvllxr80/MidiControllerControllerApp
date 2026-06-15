@@ -4,7 +4,7 @@
 > Shipped: Tauri v2 + Svelte 5 + TS shell, custom frameless title bar, collapsible sidebar,
 > the transport interface + JSON-lines protocol with **identify-confirm + dedupe-by-`device_id`**,
 > Mock / Serial / USB (raw vendor-WinUSB) / Wi-Fi transports, the full Sets/Songs/Pedals GUI
-> editor, and firmware flashing over the USB bootloader. **Next:** themes (Appearance).
+> editor, and firmware flashing over the USB bootloader, plus an 8-theme Appearance picker.
 > [`../README.md`](../README.md) is the live per-area status table; this file is the design
 > rationale + roadmap. Run with `npm install && npm run tauri dev`.
 
@@ -308,8 +308,9 @@ changes were needed — the payoff of the interface. **Ethernet** remains a futu
 
 **Also shipped beyond the original plan:** firmware update/reboot (`reboot` / `reboot_bootloader`
 ops + `firmware.rs` bootloader-drive flash + the Firmware view and Connect flash card), the
-custom title bar, and the collapsible sidebar (which replaced the top segmented nav). **Themes
-(Appearance)** is the next feature.
+custom title bar, the collapsible sidebar (which replaced the top segmented nav), and **Themes
+(Appearance)** — an 8-theme picker (`src/routes/Appearance.svelte` + `src/lib/theme.ts`) that
+remaps the `app.css` design tokens via `[data-theme]`, persisted, with a Match-OS option.
 
 ---
 
