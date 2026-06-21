@@ -20,6 +20,8 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 const DISCOVER_WINDOW: Duration = Duration::from_millis(700);
 /// Bound on noise/log lines skipped while waiting for a matching response.
 const MAX_SKIP_LINES: usize = 256;
+const HANDSHAKE_RETRIES: usize = 2;
+const RETRY_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WifiTransport {
     conn: Option<Conn>,
@@ -112,12 +114,28 @@ impl Transport for WifiTransport {
         let mut conn = Conn { writer, reader, next_id: 1 };
 
         // Identify handshake confirms the device speaks our protocol.
-        let resp = conn.roundtrip(&Request::Identify).map_err(|e| {
-            anyhow!(
-                "connected to {host}:{port} but no identify response — is the \
-                 MidiController firmware on this network and speaking the protocol? ({e})"
-            )
-        })?;
+        // Retry a couple of times — the firmware may still be flushing startup
+        // output when the socket is first opened and miss the first request.
+        let resp = {
+            let mut last_err = anyhow!("no attempts made");
+            let mut found = None;
+            for attempt in 0..=HANDSHAKE_RETRIES {
+                if attempt > 0 {
+                    std::thread::sleep(RETRY_DELAY);
+                }
+                match conn.roundtrip(&Request::Identify) {
+                    Ok(r) => { found = Some(r); break; }
+                    Err(e) => last_err = e,
+                }
+            }
+            found.ok_or_else(|| {
+                anyhow!(
+                    "connected to {host}:{port} but no identify response after {} attempts — \
+                     is the MidiController firmware on this network and speaking the protocol? ({last_err})",
+                    HANDSHAKE_RETRIES + 1
+                )
+            })?
+        };
         let identity: DeviceIdentity = resp
             .data
             .ok_or_else(|| anyhow!("identify returned no data"))

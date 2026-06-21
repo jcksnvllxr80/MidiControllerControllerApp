@@ -41,6 +41,8 @@ const READ_CHUNK: usize = 4096;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Bound on noise/log lines skipped while waiting for a matching response.
 const MAX_SKIP_LINES: usize = 256;
+const HANDSHAKE_RETRIES: usize = 2;
+const RETRY_DELAY: Duration = Duration::from_millis(200);
 
 /// Narrow discovery to the firmware's vendor VID/PID so the picker shows our
 /// device only — not every USB peripheral (which all dead-ended before).
@@ -137,12 +139,28 @@ impl Transport for UsbTransport {
         let mut link = UsbLink::new(iface);
 
         // Identify handshake confirms the device speaks our protocol.
-        let resp = link.roundtrip(&Request::Identify).map_err(|e| {
-            anyhow!(
-                "claimed the USB interface but no identify response — is the firmware's \
-                 vendor link running and speaking the wire protocol? ({e})"
-            )
-        })?;
+        // Retry a couple of times — the firmware may still be flushing startup
+        // output when the interface is first claimed and miss the first request.
+        let resp = {
+            let mut last_err = anyhow!("no attempts made");
+            let mut found = None;
+            for attempt in 0..=HANDSHAKE_RETRIES {
+                if attempt > 0 {
+                    thread::sleep(RETRY_DELAY);
+                }
+                match link.roundtrip(&Request::Identify) {
+                    Ok(r) => { found = Some(r); break; }
+                    Err(e) => last_err = e,
+                }
+            }
+            found.ok_or_else(|| {
+                anyhow!(
+                    "claimed the USB interface but no identify response after {} attempts — \
+                     is the firmware's vendor link running and speaking the wire protocol? ({last_err})",
+                    HANDSHAKE_RETRIES + 1
+                )
+            })?
+        };
         let identity: DeviceIdentity = resp
             .data
             .ok_or_else(|| anyhow!("identify returned no data"))

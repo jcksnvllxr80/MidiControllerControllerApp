@@ -39,6 +39,12 @@ pub enum Request {
     Dpad { direction: String },
     /// Live control: short button press (`1`..`5`).
     Short { button: String },
+    /// Live control: long button press (~600 ms hold).
+    Long { button: String },
+    /// Live control: extra-long button press (~1500 ms hold).
+    ExtraLong { button: String },
+    /// Poll the firmware's current display message without changing state.
+    GetDisplay,
 
     /// WiFi setup, carried over USB or TCP. `data` is the status object
     /// (`enabled`/`connected`/`ssid`/`ip`).
@@ -113,13 +119,16 @@ mod tests {
             (Request::DeletePedal { name: "a".into() }, "delete_pedal"),
             (Request::Dpad { direction: "up".into() }, "dpad"),
             (Request::Short { button: "1".into() }, "short"),
+            (Request::Long { button: "1".into() }, "long"),
+            (Request::ExtraLong { button: "1".into() }, "extra_long"),
+            (Request::GetDisplay, "get_display"),
             (Request::WifiStatus, "wifi_status"),
             (Request::WifiSet { ssid: "n".into(), password: Some("p".into()) }, "wifi_set"),
             (Request::WifiEnable { on: true }, "wifi_enable"),
             (Request::Reboot, "reboot"),
             (Request::RebootBootloader, "reboot_bootloader"),
         ];
-        assert_eq!(cases.len(), 23, "every Request variant must be covered");
+        assert_eq!(cases.len(), 26, "every Request variant must be covered");
         for (req, expected) in &cases {
             assert_eq!(&op_of(req), expected);
         }
@@ -221,6 +230,9 @@ mod more_tests {
             (r#"{"op":"delete_pedal","name":"a"}"#, |r| matches!(r, Request::DeletePedal { .. })),
             (r#"{"op":"dpad","direction":"up"}"#, |r| matches!(r, Request::Dpad { .. })),
             (r#"{"op":"short","button":"1"}"#, |r| matches!(r, Request::Short { .. })),
+            (r#"{"op":"long","button":"1"}"#, |r| matches!(r, Request::Long { .. })),
+            (r#"{"op":"extra_long","button":"1"}"#, |r| matches!(r, Request::ExtraLong { .. })),
+            (r#"{"op":"get_display"}"#, |r| matches!(r, Request::GetDisplay)),
             (r#"{"op":"wifi_status"}"#, |r| matches!(r, Request::WifiStatus)),
             (r#"{"op":"wifi_set","ssid":"a","password":"b"}"#, |r| matches!(r, Request::WifiSet { .. })),
             (r#"{"op":"wifi_set","ssid":"a"}"#, |r| matches!(r, Request::WifiSet { password: None, .. })),
@@ -228,7 +240,7 @@ mod more_tests {
             (r#"{"op":"reboot"}"#, |r| matches!(r, Request::Reboot)),
             (r#"{"op":"reboot_bootloader"}"#, |r| matches!(r, Request::RebootBootloader)),
         ];
-        assert_eq!(cases.len(), 24);
+        assert_eq!(cases.len(), 27);
         for (raw, pred) in cases {
             let req: Request = serde_json::from_str(raw).unwrap();
             assert!(pred(&req), "wrong variant for {raw}");

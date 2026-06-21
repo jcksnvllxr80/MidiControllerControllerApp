@@ -16,6 +16,8 @@ const DEFAULT_BAUD: u32 = 115_200;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Bound on noise/log lines skipped while waiting for a matching response.
 const MAX_SKIP_LINES: usize = 256;
+const HANDSHAKE_RETRIES: usize = 2;
+const RETRY_DELAY: Duration = Duration::from_millis(200);
 
 /// Worth probing as a controller port. Matches by **VID** — the RP2350/Pico VID
 /// `0x2E8A` (default CDC build) or our raw-USB vendor `0xCAFE`/`0x4001` — because
@@ -113,17 +115,31 @@ impl Transport for SerialTransport {
         let mut conn = Conn { writer, reader, next_id: 1 };
 
         // Identify handshake confirms the device speaks our protocol.
+        // Retry a couple of times — the firmware may still be flushing startup
+        // output when the port is first opened and miss the first request.
         let log_buf = self.log_buf.clone();
-        let resp = conn
-            .roundtrip(&Request::Identify, &mut make_log_cb(log_buf))
-            .map_err(|e| {
+        let resp = {
+            let mut last_err = anyhow!("no attempts made");
+            let mut found = None;
+            for attempt in 0..=HANDSHAKE_RETRIES {
+                if attempt > 0 {
+                    std::thread::sleep(RETRY_DELAY);
+                }
+                match conn.roundtrip(&Request::Identify, &mut make_log_cb(log_buf.clone())) {
+                    Ok(r) => { found = Some(r); break; }
+                    Err(e) => last_err = e,
+                }
+            }
+            found.ok_or_else(|| {
                 anyhow!(
-                    "opened {} but no identify response — is the MidiController firmware \
-                     running and speaking the wire protocol? ({})",
+                    "opened {} but no identify response after {} attempts — is the \
+                     MidiController firmware running and speaking the wire protocol? ({})",
                     port_name,
-                    e
+                    HANDSHAKE_RETRIES + 1,
+                    last_err
                 )
-            })?;
+            })?
+        };
         let identity: DeviceIdentity = resp
             .data
             .ok_or_else(|| anyhow!("identify returned no data"))

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { connection, connectionError, appendDeviceLog } from "./lib/stores";
+  import { connection, connectionError, appendDeviceLog, deviceLogs } from "./lib/stores";
   import {
     onConnectionStatus,
     onDeviceLog,
@@ -30,7 +30,10 @@
 
   onMount(async () => {
     appVersion().then((v) => (version = v));
-    unlisten = await onConnectionStatus((s) => connection.set(s));
+    unlisten = await onConnectionStatus((s) => {
+      if (s.connected) deviceLogs.set([]);
+      connection.set(s);
+    });
     unlistenLog = await onDeviceLog(appendDeviceLog);
     try {
       connection.set(await fetchConnectionStatus());

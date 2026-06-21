@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
+  import { connection } from "../lib/stores";
   import { request } from "../lib/transport";
   import { humanizeError } from "../lib/errors";
 
@@ -6,14 +8,67 @@
   let busy = false;
   let error = "";
 
+  // Long-press thresholds
+  const LONG_MS = 600;
+  const EXTRA_LONG_MS = 1500;
+
+  // Which numbered button (1..5) is currently being held, and how far along
+  let holdingBtn: string | null = null;
+  let holdLevel = 0; // 0 = held but not long yet, 1 = long, 2 = extra-long
+  let holdStart = 0;
+  let longTimer: ReturnType<typeof setTimeout> | undefined;
+  let extraLongTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function pointerDown(e: PointerEvent, button: string) {
+    if (busy) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    holdingBtn = button;
+    holdLevel = 0;
+    holdStart = Date.now();
+    longTimer = setTimeout(() => { holdLevel = 1; }, LONG_MS);
+    extraLongTimer = setTimeout(() => { holdLevel = 2; }, EXTRA_LONG_MS);
+  }
+
+  function pointerUp(button: string) {
+    clearHoldTimers();
+    if (!holdingBtn) return;
+    const elapsed = Date.now() - holdStart;
+    const lvl = holdLevel;
+    holdingBtn = null;
+    holdLevel = 0;
+    if (elapsed >= EXTRA_LONG_MS || lvl >= 2) {
+      send({ op: "extra_long", button });
+    } else if (elapsed >= LONG_MS || lvl >= 1) {
+      send({ op: "long", button });
+    } else {
+      send({ op: "short", button });
+    }
+  }
+
+  function pointerCancel() {
+    clearHoldTimers();
+    holdingBtn = null;
+    holdLevel = 0;
+  }
+
+  function clearHoldTimers() {
+    clearTimeout(longTimer);
+    clearTimeout(extraLongTimer);
+    longTimer = undefined;
+    extraLongTimer = undefined;
+  }
+
   async function dpad(direction: string) {
     await send({ op: "dpad", direction });
   }
-  async function short(button: string) {
-    await send({ op: "short", button });
-  }
 
-  async function send(req: { op: "dpad"; direction: string } | { op: "short"; button: string }) {
+  type ControlReq =
+    | { op: "dpad"; direction: string }
+    | { op: "short"; button: string }
+    | { op: "long"; button: string }
+    | { op: "extra_long"; button: string };
+
+  async function send(req: ControlReq) {
     busy = true;
     error = "";
     try {
@@ -25,6 +80,33 @@
       busy = false;
     }
   }
+
+  // Background display poll — keeps the readout in sync when hardware buttons
+  // are pressed directly on the device.
+  let polling = false;
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+  onMount(() => {
+    pollTimer = setInterval(async () => {
+      if (!$connection.connected || busy || polling || holdingBtn) return;
+      polling = true;
+      try {
+        const data = await request<{ display_message?: string }>({ op: "get_display" });
+        if (data?.display_message != null) {
+          display = data.display_message.split(" - ").join("\n");
+        }
+      } catch {
+        // silent — poll failures don't surface as errors
+      } finally {
+        polling = false;
+      }
+    }, 500);
+  });
+
+  onDestroy(() => {
+    clearInterval(pollTimer);
+    clearHoldTimers();
+  });
 
   $: lines = display ? display.split("\n") : [];
 </script>
@@ -53,20 +135,60 @@
       <div class="stepper">
         <span class="label">Song</span>
         <div class="pn">
-          <button aria-label="Previous song" on:click={() => short("4")} disabled={busy}>‹</button>
-          <button aria-label="Next song" on:click={() => short("5")} disabled={busy}>›</button>
+          <button
+            aria-label="Previous song"
+            class:holding={holdingBtn === "4"}
+            class:long-held={holdingBtn === "4" && holdLevel >= 1}
+            class:extra-long-held={holdingBtn === "4" && holdLevel >= 2}
+            on:pointerdown={(e) => pointerDown(e, "4")}
+            on:pointerup={() => pointerUp("4")}
+            on:pointercancel={pointerCancel}
+            disabled={busy}>‹</button>
+          <button
+            aria-label="Next song"
+            class:holding={holdingBtn === "5"}
+            class:long-held={holdingBtn === "5" && holdLevel >= 1}
+            class:extra-long-held={holdingBtn === "5" && holdLevel >= 2}
+            on:pointerdown={(e) => pointerDown(e, "5")}
+            on:pointerup={() => pointerUp("5")}
+            on:pointercancel={pointerCancel}
+            disabled={busy}>›</button>
         </div>
       </div>
       <div class="stepper">
         <span class="label">Part</span>
         <div class="pn">
-          <button aria-label="Previous part" on:click={() => short("1")} disabled={busy}>‹</button>
-          <button aria-label="Next part" on:click={() => short("3")} disabled={busy}>›</button>
+          <button
+            aria-label="Previous part"
+            class:holding={holdingBtn === "1"}
+            class:long-held={holdingBtn === "1" && holdLevel >= 1}
+            class:extra-long-held={holdingBtn === "1" && holdLevel >= 2}
+            on:pointerdown={(e) => pointerDown(e, "1")}
+            on:pointerup={() => pointerUp("1")}
+            on:pointercancel={pointerCancel}
+            disabled={busy}>‹</button>
+          <button
+            aria-label="Next part"
+            class:holding={holdingBtn === "3"}
+            class:long-held={holdingBtn === "3" && holdLevel >= 1}
+            class:extra-long-held={holdingBtn === "3" && holdLevel >= 2}
+            on:pointerdown={(e) => pointerDown(e, "3")}
+            on:pointerup={() => pointerUp("3")}
+            on:pointercancel={pointerCancel}
+            disabled={busy}>›</button>
         </div>
       </div>
     </div>
 
-    <button class="select primary" on:click={() => short("2")} disabled={busy}>Select</button>
+    <button
+      class="select primary"
+      class:holding={holdingBtn === "2"}
+      class:long-held={holdingBtn === "2" && holdLevel >= 1}
+      class:extra-long-held={holdingBtn === "2" && holdLevel >= 2}
+      on:pointerdown={(e) => pointerDown(e, "2")}
+      on:pointerup={() => pointerUp("2")}
+      on:pointercancel={pointerCancel}
+      disabled={busy}>Select</button>
 
     <!-- Encoder / menu (secondary) -->
     <div class="menu">
@@ -173,16 +295,38 @@
     font-size: 1.35rem;
     line-height: 1;
     color: var(--text-dim);
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+    touch-action: none;
   }
   .pn button:hover {
     background: var(--panel-2);
     color: var(--text);
   }
 
+  /* Hold-state feedback for numbered buttons */
+  .pn button.holding,
+  .select.holding {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+  .pn button.long-held,
+  .select.long-held {
+    background: color-mix(in srgb, var(--accent) 20%, var(--panel-2));
+    color: var(--accent);
+  }
+  .pn button.extra-long-held,
+  .select.extra-long-held {
+    background: color-mix(in srgb, var(--accent) 40%, var(--panel-2));
+    color: var(--accent);
+  }
+
   /* Select — the one prominent action */
   .select {
     padding: var(--s4);
     font-size: var(--t-base);
+    user-select: none;
+    touch-action: none;
   }
 
   /* Encoder / menu — secondary */

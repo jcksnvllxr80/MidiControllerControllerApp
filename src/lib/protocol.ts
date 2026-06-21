@@ -59,6 +59,9 @@ export type Request =
   | { op: "delete_pedal"; name: string }
   | { op: "dpad"; direction: string }
   | { op: "short"; button: string }
+  | { op: "long"; button: string }
+  | { op: "extra_long"; button: string }
+  | { op: "get_display" }
   | { op: "wifi_status" }
   | { op: "wifi_set"; ssid: string; password?: string }
   | { op: "wifi_enable"; on: boolean }

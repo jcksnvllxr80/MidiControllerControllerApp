@@ -19,6 +19,7 @@ pub struct MockTransport {
     wifi_connected: bool,
     wifi_ssid: String,
     wifi_ip: String,
+    display: String,
 }
 
 impl MockTransport {
@@ -32,6 +33,7 @@ impl MockTransport {
             wifi_connected: false,
             wifi_ssid: String::new(),
             wifi_ip: String::new(),
+            display: String::new(),
         };
         t.seed();
         t
@@ -196,10 +198,23 @@ impl Transport for MockTransport {
             }
 
             Request::Dpad { direction } => {
-                Response::ok(json!({ "display_message": format!("DPAD {direction} - mock device") }))
+                self.display = format!("DPAD {direction} - mock device");
+                Response::ok(json!({ "display_message": self.display }))
             }
             Request::Short { button } => {
-                Response::ok(json!({ "display_message": format!("BUTTON {button} - mock device") }))
+                self.display = format!("BUTTON {button} SHORT - mock device");
+                Response::ok(json!({ "display_message": self.display }))
+            }
+            Request::Long { button } => {
+                self.display = format!("BUTTON {button} LONG - mock device");
+                Response::ok(json!({ "display_message": self.display }))
+            }
+            Request::ExtraLong { button } => {
+                self.display = format!("BUTTON {button} XLONG - mock device");
+                Response::ok(json!({ "display_message": self.display }))
+            }
+            Request::GetDisplay => {
+                Response::ok(json!({ "display_message": self.display }))
             }
 
             Request::WifiStatus => Response::ok(self.wifi_status()),
