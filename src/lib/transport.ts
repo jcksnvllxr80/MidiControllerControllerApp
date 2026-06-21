@@ -57,6 +57,15 @@ export function onConnectionStatus(
   return listen<ConnectionStatus>("connection-status", (e) => cb(e.payload));
 }
 
+export function onDeviceLog(cb: (line: string) => void): Promise<UnlistenFn> {
+  return listen<string>("device-log", (e) => cb(e.payload));
+}
+
+/** Return the directory where app.log and device.log are written. */
+export function getLogDir(): Promise<string> {
+  return invoke<string>("get_log_dir");
+}
+
 /** Send a request and return its data, throwing on transport or logical error. */
 export async function request<T = any>(req: Request): Promise<T> {
   const resp = await sendRequest(req);

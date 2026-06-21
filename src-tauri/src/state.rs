@@ -3,6 +3,8 @@
 //! lives here (hardware-free against the mock) so it's unit-testable; the Tauri
 //! commands are thin wrappers that call these and emit events.
 
+use std::mem;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
@@ -33,6 +35,12 @@ impl ConnectionStatus {
 pub struct AppState {
     pub registry: Arc<TransportRegistry>,
     pub active: Arc<Mutex<ActiveConnection>>,
+    /// Accumulates non-JSON lines (firmware printf output) captured during
+    /// protocol exchanges. Drained by the command layer and emitted as events.
+    pub log_buf: Arc<Mutex<Vec<String>>>,
+    /// Directory where app.log and device.log are written.  Empty in test
+    /// contexts (logging is not initialised there).
+    pub log_dir: PathBuf,
 }
 
 #[derive(Default)]
@@ -58,6 +66,28 @@ impl AppState {
         Self {
             registry: Arc::new(TransportRegistry::with_defaults()),
             active: Arc::new(Mutex::new(ActiveConnection::default())),
+            log_buf: Arc::new(Mutex::new(Vec::new())),
+            log_dir: PathBuf::new(),
+        }
+    }
+
+    /// Set the log directory (builder style).  Called by `lib.rs::run()` after
+    /// `logging::init` so the path can be surfaced to the frontend on demand.
+    pub fn with_log_dir(mut self, dir: PathBuf) -> Self {
+        self.log_dir = dir;
+        self
+    }
+
+    /// Return the active log directory as a string (empty if not configured).
+    pub fn get_log_dir(&self) -> String {
+        self.log_dir.to_string_lossy().into_owned()
+    }
+
+    /// Drain and return any log lines captured since the last drain.
+    pub fn drain_logs(&self) -> Vec<String> {
+        match self.log_buf.lock() {
+            Ok(mut buf) => mem::take(&mut *buf),
+            Err(_) => Vec::new(),
         }
     }
 
@@ -71,6 +101,8 @@ impl AppState {
             .registry
             .make_transport(device.protocol)
             .ok_or_else(|| AppError::Unsupported(device.protocol.label().to_string()))?;
+
+        transport.set_log_sink(self.log_buf.clone());
 
         let identity = transport
             .connect(&device)

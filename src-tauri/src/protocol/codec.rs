@@ -68,12 +68,14 @@ pub fn read_line<R: Read + ?Sized>(reader: &mut R) -> Result<String> {
 
 /// One framed exchange over a stream: encode + write `req`, then read lines
 /// until the frame with `id` arrives (skipping up to `max_skip` noise lines).
+/// `log_cb` is called with every non-empty, non-JSON line (firmware log output).
 pub fn roundtrip<W: Write + ?Sized, R: Read + ?Sized>(
     writer: &mut W,
     reader: &mut R,
     id: u64,
     req: &Request,
     max_skip: usize,
+    log_cb: &mut dyn FnMut(&str),
 ) -> Result<Response> {
     let bytes = encode_request(id, req)?;
     writer.write_all(&bytes)?;
@@ -83,6 +85,10 @@ pub fn roundtrip<W: Write + ?Sized, R: Read + ?Sized>(
         let line = read_line(reader)?;
         if let Some(resp) = match_response_line(&line, id)? {
             return Ok(resp);
+        }
+        let trimmed = line.trim();
+        if !trimmed.is_empty() && serde_json::from_str::<Value>(trimmed).is_err() {
+            log_cb(trimmed);
         }
     }
     Err(anyhow!("no matching response for request {}", id))
@@ -183,7 +189,7 @@ mod tests {
         let lines = "garbage\n{\"id\":99,\"ok\":true}\n{\"id\":1,\"ok\":true,\"data\":{\"x\":5}}\n";
         let mut reader = Cursor::new(lines.as_bytes().to_vec());
 
-        let resp = roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 16).unwrap();
+        let resp = roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 16, &mut |_| {}).unwrap();
         assert!(resp.ok);
         assert_eq!(resp.data.unwrap()["x"], 5);
 
@@ -196,7 +202,7 @@ mod tests {
     fn roundtrip_errors_when_no_match_before_eof() {
         let mut writer: Vec<u8> = Vec::new();
         let mut reader = Cursor::new(b"{\"id\":2,\"ok\":true}\n".to_vec());
-        assert!(roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 16).is_err());
+        assert!(roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 16, &mut |_| {}).is_err());
     }
 
     #[test]
@@ -208,7 +214,7 @@ mod tests {
             lines.push_str("{\"id\":2,\"ok\":true}\n");
         }
         let mut reader = Cursor::new(lines.into_bytes());
-        assert!(roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 3).is_err());
+        assert!(roundtrip(&mut writer, &mut reader, 1, &Request::Ping, 3, &mut |_| {}).is_err());
     }
 }
 
@@ -281,7 +287,7 @@ mod more_tests {
     fn roundtrip_preserves_nested_data() {
         let mut w: Vec<u8> = Vec::new();
         let mut r = Cursor::new(b"{\"id\":1,\"ok\":true,\"data\":{\"a\":{\"b\":[1,2,{\"c\":3}]}}}\n".to_vec());
-        let resp = roundtrip(&mut w, &mut r, 1, &Request::Ping, 8).unwrap();
+        let resp = roundtrip(&mut w, &mut r, 1, &Request::Ping, 8, &mut |_| {}).unwrap();
         assert_eq!(resp.data.unwrap()["a"]["b"][2]["c"], 3);
     }
 
@@ -289,7 +295,7 @@ mod more_tests {
     fn roundtrip_matches_second_frame_when_first_is_wrong_id() {
         let mut w: Vec<u8> = Vec::new();
         let mut r = Cursor::new(b"{\"id\":7,\"ok\":false}\n{\"id\":3,\"ok\":true,\"data\":1}\n".to_vec());
-        let resp = roundtrip(&mut w, &mut r, 3, &Request::Ping, 8).unwrap();
+        let resp = roundtrip(&mut w, &mut r, 3, &Request::Ping, 8, &mut |_| {}).unwrap();
         assert!(resp.ok);
     }
 
@@ -302,5 +308,28 @@ mod more_tests {
         .unwrap();
         assert_eq!(bytes.iter().filter(|&&b| b == b'\n').count(), 1);
         assert_eq!(*bytes.last().unwrap(), b'\n');
+    }
+
+    #[test]
+    fn roundtrip_log_cb_fires_for_non_json_lines() {
+        let mut w: Vec<u8> = Vec::new();
+        let stream = "boot: system ready\ndebug: loading config\n{\"id\":1,\"ok\":true}\n";
+        let mut r = Cursor::new(stream.as_bytes().to_vec());
+        let mut captured: Vec<String> = Vec::new();
+        roundtrip(&mut w, &mut r, 1, &Request::Ping, 16, &mut |l| captured.push(l.to_string()))
+            .unwrap();
+        assert_eq!(captured, ["boot: system ready", "debug: loading config"]);
+    }
+
+    #[test]
+    fn roundtrip_log_cb_silent_for_wrong_id_json_and_blank_lines() {
+        let mut w: Vec<u8> = Vec::new();
+        // wrong-id JSON and a blank line must NOT appear in log output.
+        let stream = "\n{\"id\":99,\"ok\":true}\n{\"id\":1,\"ok\":true}\n";
+        let mut r = Cursor::new(stream.as_bytes().to_vec());
+        let mut captured: Vec<String> = Vec::new();
+        roundtrip(&mut w, &mut r, 1, &Request::Ping, 16, &mut |l| captured.push(l.to_string()))
+            .unwrap();
+        assert!(captured.is_empty(), "wrong-id JSON and blank lines must not surface as logs");
     }
 }

@@ -27,6 +27,9 @@ log = "0.4"
 mdns-sd = "0.20"
 sysinfo = "0.33"
 tauri-plugin-dialog = "2.0.0-rc.8"
+fern = "0.6"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+toml = "0.8"
 
 [features]
 # DO NOT REMOVE: used by `tauri build`.

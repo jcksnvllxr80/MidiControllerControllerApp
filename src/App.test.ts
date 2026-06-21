@@ -7,6 +7,8 @@ vi.mock("./lib/transport", () => ({
   disconnectDevice: vi.fn(() => Promise.resolve({ connected: false })),
   onDeviceFound: vi.fn(() => Promise.resolve(() => {})),
   onConnectionStatus: vi.fn(() => Promise.resolve(() => {})),
+  onDeviceLog: vi.fn(() => Promise.resolve(() => {})),
+  getLogDir: vi.fn(() => Promise.resolve("")),
   fetchConnectionStatus: vi.fn(() => Promise.resolve({ connected: false })),
   sendRequest: vi.fn(() => Promise.resolve({ ok: true })),
   request: vi.fn(() => Promise.resolve(null)),
@@ -70,6 +72,13 @@ describe("App shell", () => {
     render(App);
     await fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     expect(t.disconnectDevice).toHaveBeenCalled();
+  });
+
+  it("nav switches to the Logs view", async () => {
+    t.fetchConnectionStatus.mockResolvedValue(connected);
+    render(App);
+    await fireEvent.click(await screen.findByRole("button", { name: "Logs" }));
+    expect(await screen.findByText(/no log output yet/i)).toBeTruthy();
   });
 
   it("reacts to a connection-status event flipping to connected", async () => {

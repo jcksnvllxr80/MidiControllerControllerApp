@@ -11,6 +11,18 @@ export const connection = writable<ConnectionStatus>({ connected: false });
  */
 export const connectionError = writable<string>("");
 
+const MAX_LOG_LINES = 10_000;
+
+/** Accumulated firmware log lines — persists across tab switches. */
+export const deviceLogs = writable<string[]>([]);
+
+export function appendDeviceLog(line: string) {
+  deviceLogs.update((lines) => {
+    const next = lines.length >= MAX_LOG_LINES ? lines.slice(lines.length - MAX_LOG_LINES + 1) : lines;
+    return [...next, line];
+  });
+}
+
 /** Left sidebar collapsed (icons only) vs expanded (icons + labels). Persisted. */
 const SIDEBAR_KEY = "sidebarCollapsed";
 function loadCollapsed(): boolean {

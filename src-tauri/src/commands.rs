@@ -16,7 +16,9 @@ pub async fn scan_devices(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<DeviceInfo>, AppError> {
+    log::info!("scanning for devices");
     let devices = state.registry.discover_all();
+    log::info!("scan found {} device(s)", devices.len());
     for d in &devices {
         let _ = app.emit("device-found", d.clone());
     }
@@ -29,8 +31,18 @@ pub async fn connect_device(
     state: State<'_, AppState>,
     device: DeviceInfo,
 ) -> Result<ConnectionStatus, AppError> {
-    let status = state.connect(device)?;
+    log::info!("connecting to '{}' ({})", device.name, device.id);
+    let status = state.connect(device).map_err(|e| {
+        log::warn!("connection failed: {e}");
+        e
+    })?;
+    if let Some(id) = &status.identity {
+        log::info!("connected: {} firmware {}", id.name, id.firmware);
+    }
     let _ = app.emit("connection-status", status.clone());
+    for line in state.drain_logs() {
+        let _ = app.emit("device-log", line);
+    }
     Ok(status)
 }
 
@@ -39,6 +51,7 @@ pub async fn disconnect_device(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ConnectionStatus, AppError> {
+    log::info!("disconnecting from device");
     let status = state.disconnect()?;
     let _ = app.emit("connection-status", status.clone());
     Ok(status)
@@ -46,15 +59,32 @@ pub async fn disconnect_device(
 
 #[tauri::command]
 pub async fn send_request(
+    app: AppHandle,
     state: State<'_, AppState>,
     request: Request,
 ) -> Result<Response, AppError> {
-    state.send(request)
+    // Drain logs even on error so firmware output isn't silently swallowed when
+    // a request times out (the logs often explain *why* it failed).
+    let result = state.send(request);
+    if let Err(ref e) = result {
+        log::warn!("request error: {e}");
+    }
+    for line in state.drain_logs() {
+        let _ = app.emit("device-log", line);
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn connection_status(state: State<'_, AppState>) -> Result<ConnectionStatus, AppError> {
     Ok(state.status())
+}
+
+/// Return the directory where `app.log` and `device.log` are written.
+/// Empty string if logging could not be initialised at startup.
+#[tauri::command]
+pub async fn get_log_dir(state: State<'_, AppState>) -> Result<String, AppError> {
+    Ok(state.get_log_dir())
 }
 
 /// Look for the RP2350 UF2 bootloader drive (present after `reboot_bootloader`).
@@ -67,11 +97,18 @@ pub async fn find_bootloader() -> Option<crate::firmware::BootloaderDrive> {
 /// to be in bootloader mode (USB), regardless of how it was connected.
 #[tauri::command]
 pub async fn flash_firmware(uf2_path: String) -> Result<String, AppError> {
+    log::info!("flashing firmware from {uf2_path}");
     let drive = crate::firmware::find_bootloader().ok_or_else(|| {
         AppError::Internal(
             "No RP2350 bootloader drive found — put the device in bootloader mode (Update firmware) and plug in USB."
                 .into(),
         )
     })?;
-    crate::firmware::flash_uf2(&uf2_path, &drive.mount_point).map_err(AppError::Internal)
+    let result = crate::firmware::flash_uf2(&uf2_path, &drive.mount_point)
+        .map_err(AppError::Internal);
+    match &result {
+        Ok(dest) => log::info!("firmware flashed to {dest}"),
+        Err(e) => log::warn!("firmware flash failed: {e}"),
+    }
+    result
 }

@@ -145,7 +145,7 @@ impl FakeFirmware {
     fn request(&mut self, req: &Request) -> Response {
         let id = self.next_id;
         self.next_id += 1;
-        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, 256).unwrap()
+        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, 256, &mut |_| {}).unwrap()
     }
 }
 

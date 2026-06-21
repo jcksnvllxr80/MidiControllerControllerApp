@@ -3,6 +3,7 @@
 //! USB-CDC virtual COM port and a real UART via an FTDI/CP2102 adapter alike —
 //! the same port handling proven in `serial-flash-gui`.
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -29,6 +30,7 @@ fn is_controller_usb(vid: u16, pid: u16, product: Option<&str>) -> bool {
 
 pub struct SerialTransport {
     conn: Option<Conn>,
+    log_buf: Arc<Mutex<Vec<String>>>,
 }
 
 struct Conn {
@@ -40,7 +42,7 @@ struct Conn {
 
 impl SerialTransport {
     pub fn new() -> Self {
-        Self { conn: None }
+        Self { conn: None, log_buf: Arc::new(Mutex::new(Vec::new())) }
     }
 }
 
@@ -87,6 +89,10 @@ impl Transport for SerialTransport {
             .collect()
     }
 
+    fn set_log_sink(&mut self, sink: Arc<Mutex<Vec<String>>>) {
+        self.log_buf = sink;
+    }
+
     fn connect(&mut self, device: &DeviceInfo) -> Result<DeviceIdentity> {
         let (port_name, baud) = match &device.address {
             Address::Port { name, baud } => (name.clone(), *baud),
@@ -107,14 +113,17 @@ impl Transport for SerialTransport {
         let mut conn = Conn { writer, reader, next_id: 1 };
 
         // Identify handshake confirms the device speaks our protocol.
-        let resp = conn.roundtrip(&Request::Identify).map_err(|e| {
-            anyhow!(
-                "opened {} but no identify response — is the MidiController firmware \
-                 running and speaking the wire protocol? ({})",
-                port_name,
-                e
-            )
-        })?;
+        let log_buf = self.log_buf.clone();
+        let resp = conn
+            .roundtrip(&Request::Identify, &mut make_log_cb(log_buf))
+            .map_err(|e| {
+                anyhow!(
+                    "opened {} but no identify response — is the MidiController firmware \
+                     running and speaking the wire protocol? ({})",
+                    port_name,
+                    e
+                )
+            })?;
         let identity: DeviceIdentity = resp
             .data
             .ok_or_else(|| anyhow!("identify returned no data"))
@@ -140,15 +149,26 @@ impl Transport for SerialTransport {
             .conn
             .as_mut()
             .ok_or_else(|| anyhow!("serial transport not connected"))?;
-        conn.roundtrip(req)
+        let log_buf = self.log_buf.clone();
+        conn.roundtrip(req, &mut make_log_cb(log_buf))
+    }
+}
+
+fn make_log_cb(buf: Arc<Mutex<Vec<String>>>) -> impl FnMut(&str) {
+    move |line: &str| {
+        // Route to device.log via the fern dispatcher (no-op if logging not initialised).
+        log::info!(target: "device", "{}", line);
+        if let Ok(mut v) = buf.lock() {
+            v.push(line.to_string());
+        }
     }
 }
 
 impl Conn {
-    fn roundtrip(&mut self, req: &Request) -> Result<Response> {
+    fn roundtrip(&mut self, req: &Request, log_cb: &mut dyn FnMut(&str)) -> Result<Response> {
         let id = self.next_id;
         self.next_id += 1;
-        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, MAX_SKIP_LINES)
+        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, MAX_SKIP_LINES, log_cb)
     }
 }
 

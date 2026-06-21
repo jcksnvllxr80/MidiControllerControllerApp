@@ -117,6 +117,11 @@ pub trait Transport: Send {
 
     #[allow(dead_code)]
     fn is_connected(&self) -> bool;
+
+    /// Attach a shared log buffer. Non-JSON lines received during protocol
+    /// exchanges (firmware printf output) are pushed into it. Transports that
+    /// don't produce log output may ignore this (default no-op).
+    fn set_log_sink(&mut self, _sink: std::sync::Arc<std::sync::Mutex<Vec<String>>>) {}
 }
 
 #[cfg(test)]

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { connection, connectionError } from "./lib/stores";
+  import { connection, connectionError, appendDeviceLog } from "./lib/stores";
   import {
     onConnectionStatus,
+    onDeviceLog,
     fetchConnectionStatus,
     disconnectDevice,
     sendRequest,
@@ -15,19 +16,22 @@
   import Wifi from "./routes/Wifi.svelte";
   import Firmware from "./routes/Firmware.svelte";
   import Appearance from "./routes/Appearance.svelte";
+  import Logs from "./routes/Logs.svelte";
   import TitleBar from "./TitleBar.svelte";
   import Sidebar from "./Sidebar.svelte";
   import { appVersion } from "./lib/app";
 
-  type View = "control" | "configure" | "json" | "wifi" | "firmware" | "appearance";
+  type View = "control" | "configure" | "json" | "wifi" | "firmware" | "logs" | "appearance";
   let view: View = "control";
   let unlisten: UnlistenFn | undefined;
+  let unlistenLog: UnlistenFn | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let version = "";
 
   onMount(async () => {
     appVersion().then((v) => (version = v));
     unlisten = await onConnectionStatus((s) => connection.set(s));
+    unlistenLog = await onDeviceLog(appendDeviceLog);
     try {
       connection.set(await fetchConnectionStatus());
     } catch {
@@ -36,6 +40,7 @@
   });
   onDestroy(() => {
     unlisten?.();
+    unlistenLog?.();
     stopHeartbeat();
   });
 
@@ -100,6 +105,8 @@
           <Wifi />
         {:else if view === "firmware"}
           <Firmware />
+        {:else if view === "logs"}
+          <Logs />
         {:else}
           <Appearance />
         {/if}

@@ -169,7 +169,7 @@ impl Conn {
     fn roundtrip(&mut self, req: &Request) -> Result<Response> {
         let id = self.next_id;
         self.next_id += 1;
-        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, MAX_SKIP_LINES)
+        codec::roundtrip(&mut self.writer, &mut self.reader, id, req, MAX_SKIP_LINES, &mut |_| {})
     }
 }
 
