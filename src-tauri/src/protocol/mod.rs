@@ -39,10 +39,10 @@ pub enum Request {
     Dpad { direction: String },
     /// Live control: short button press (`1`..`5`).
     Short { button: String },
-    /// Live control: long button press (~600 ms hold).
-    Long { button: String },
-    /// Live control: extra-long button press (~1500 ms hold).
-    ExtraLong { button: String },
+    /// Encoder push held ~1–3 s (enters sub-menus / goes back).
+    Long,
+    /// Encoder push held ~3–6 s (opens global menu).
+    ExtraLong,
     /// Poll the firmware's current display message without changing state.
     GetDisplay,
 
@@ -119,8 +119,8 @@ mod tests {
             (Request::DeletePedal { name: "a".into() }, "delete_pedal"),
             (Request::Dpad { direction: "up".into() }, "dpad"),
             (Request::Short { button: "1".into() }, "short"),
-            (Request::Long { button: "1".into() }, "long"),
-            (Request::ExtraLong { button: "1".into() }, "extra_long"),
+            (Request::Long, "long"),
+            (Request::ExtraLong, "extra_long"),
             (Request::GetDisplay, "get_display"),
             (Request::WifiStatus, "wifi_status"),
             (Request::WifiSet { ssid: "n".into(), password: Some("p".into()) }, "wifi_set"),
@@ -230,8 +230,8 @@ mod more_tests {
             (r#"{"op":"delete_pedal","name":"a"}"#, |r| matches!(r, Request::DeletePedal { .. })),
             (r#"{"op":"dpad","direction":"up"}"#, |r| matches!(r, Request::Dpad { .. })),
             (r#"{"op":"short","button":"1"}"#, |r| matches!(r, Request::Short { .. })),
-            (r#"{"op":"long","button":"1"}"#, |r| matches!(r, Request::Long { .. })),
-            (r#"{"op":"extra_long","button":"1"}"#, |r| matches!(r, Request::ExtraLong { .. })),
+            (r#"{"op":"long"}"#, |r| matches!(r, Request::Long)),
+            (r#"{"op":"extra_long"}"#, |r| matches!(r, Request::ExtraLong)),
             (r#"{"op":"get_display"}"#, |r| matches!(r, Request::GetDisplay)),
             (r#"{"op":"wifi_status"}"#, |r| matches!(r, Request::WifiStatus)),
             (r#"{"op":"wifi_set","ssid":"a","password":"b"}"#, |r| matches!(r, Request::WifiSet { .. })),

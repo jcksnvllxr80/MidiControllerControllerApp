@@ -205,12 +205,12 @@ impl Transport for MockTransport {
                 self.display = format!("BUTTON {button} SHORT - mock device");
                 Response::ok(json!({ "display_message": self.display }))
             }
-            Request::Long { button } => {
-                self.display = format!("BUTTON {button} LONG - mock device");
+            Request::Long => {
+                self.display = "LONG PRESS - global menu".to_string();
                 Response::ok(json!({ "display_message": self.display }))
             }
-            Request::ExtraLong { button } => {
-                self.display = format!("BUTTON {button} XLONG - mock device");
+            Request::ExtraLong => {
+                self.display = "XLONG PRESS - power menu".to_string();
                 Response::ok(json!({ "display_message": self.display }))
             }
             Request::GetDisplay => {

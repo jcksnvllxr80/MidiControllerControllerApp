@@ -8,54 +8,63 @@
   let busy = false;
   let error = "";
 
-  // Long-press thresholds
-  const LONG_MS = 600;
-  const EXTRA_LONG_MS = 1500;
+  // Encoder push hold thresholds (ms) — mirror firmware's MenuTree::pressFor
+  const ENC_LONG_MS = 1000;       // dpad("up")   — sub-menu / back
+  const ENC_GLOBAL_MS = 3000;     // long          — global menu
+  const ENC_POWER_MS = 6000;      // extra_long    — power menu
 
-  // Which numbered button (1..5) is currently being held, and how far along
-  let holdingBtn: string | null = null;
-  let holdLevel = 0; // 0 = held but not long yet, 1 = long, 2 = extra-long
-  let holdStart = 0;
-  let longTimer: ReturnType<typeof setTimeout> | undefined;
-  let extraLongTimer: ReturnType<typeof setTimeout> | undefined;
+  // Hold state for the encoder push button
+  let encHolding = false;
+  let encLevel = 0;  // 0 = holding, 1 = long, 2 = global, 3 = power
+  let encStart = 0;
+  let encTimer1: ReturnType<typeof setTimeout> | undefined;
+  let encTimer2: ReturnType<typeof setTimeout> | undefined;
+  let encTimer3: ReturnType<typeof setTimeout> | undefined;
 
-  function pointerDown(e: PointerEvent, button: string) {
+  function encPointerDown(e: PointerEvent) {
     if (busy) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    holdingBtn = button;
-    holdLevel = 0;
-    holdStart = Date.now();
-    longTimer = setTimeout(() => { holdLevel = 1; }, LONG_MS);
-    extraLongTimer = setTimeout(() => { holdLevel = 2; }, EXTRA_LONG_MS);
+    encHolding = true;
+    encLevel = 0;
+    encStart = Date.now();
+    encTimer1 = setTimeout(() => { encLevel = 1; }, ENC_LONG_MS);
+    encTimer2 = setTimeout(() => { encLevel = 2; }, ENC_GLOBAL_MS);
+    encTimer3 = setTimeout(() => { encLevel = 3; }, ENC_POWER_MS);
   }
 
-  function pointerUp(button: string) {
-    clearHoldTimers();
-    if (!holdingBtn) return;
-    const elapsed = Date.now() - holdStart;
-    const lvl = holdLevel;
-    holdingBtn = null;
-    holdLevel = 0;
-    if (elapsed >= EXTRA_LONG_MS || lvl >= 2) {
-      send({ op: "extra_long", button });
-    } else if (elapsed >= LONG_MS || lvl >= 1) {
-      send({ op: "long", button });
+  function encPointerUp() {
+    clearEncTimers();
+    if (!encHolding) return;
+    const elapsed = Date.now() - encStart;
+    const lvl = encLevel;
+    encHolding = false;
+    encLevel = 0;
+    if (elapsed >= ENC_POWER_MS || lvl >= 3) {
+      send({ op: "extra_long" });
+    } else if (elapsed >= ENC_GLOBAL_MS || lvl >= 2) {
+      send({ op: "long" });
+    } else if (elapsed >= ENC_LONG_MS || lvl >= 1) {
+      send({ op: "dpad", direction: "up" });
     } else {
-      send({ op: "short", button });
+      send({ op: "dpad", direction: "down" });
     }
   }
 
-  function pointerCancel() {
-    clearHoldTimers();
-    holdingBtn = null;
-    holdLevel = 0;
+  function encPointerCancel() {
+    clearEncTimers();
+    encHolding = false;
+    encLevel = 0;
   }
 
-  function clearHoldTimers() {
-    clearTimeout(longTimer);
-    clearTimeout(extraLongTimer);
-    longTimer = undefined;
-    extraLongTimer = undefined;
+  function clearEncTimers() {
+    clearTimeout(encTimer1);
+    clearTimeout(encTimer2);
+    clearTimeout(encTimer3);
+    encTimer1 = encTimer2 = encTimer3 = undefined;
+  }
+
+  async function short(button: string) {
+    await send({ op: "short", button });
   }
 
   async function dpad(direction: string) {
@@ -65,8 +74,8 @@
   type ControlReq =
     | { op: "dpad"; direction: string }
     | { op: "short"; button: string }
-    | { op: "long"; button: string }
-    | { op: "extra_long"; button: string };
+    | { op: "long" }
+    | { op: "extra_long" };
 
   async function send(req: ControlReq) {
     busy = true;
@@ -88,7 +97,7 @@
 
   onMount(() => {
     pollTimer = setInterval(async () => {
-      if (!$connection.connected || busy || polling || holdingBtn) return;
+      if (!$connection.connected || busy || polling || encHolding) return;
       polling = true;
       try {
         const data = await request<{ display_message?: string }>({ op: "get_display" });
@@ -105,10 +114,17 @@
 
   onDestroy(() => {
     clearInterval(pollTimer);
-    clearHoldTimers();
+    clearEncTimers();
   });
 
   $: lines = display ? display.split("\n") : [];
+
+  // Label shown on the encoder push button during a hold
+  $: encHoldLabel =
+    encLevel >= 3 ? "Power menu" :
+    encLevel >= 2 ? "Global menu" :
+    encLevel >= 1 ? "Back / sub-menu" :
+    "Push";
 </script>
 
 <div class="control">
@@ -135,69 +151,42 @@
       <div class="stepper">
         <span class="label">Song</span>
         <div class="pn">
-          <button
-            aria-label="Previous song"
-            class:holding={holdingBtn === "4"}
-            class:long-held={holdingBtn === "4" && holdLevel >= 1}
-            class:extra-long-held={holdingBtn === "4" && holdLevel >= 2}
-            on:pointerdown={(e) => pointerDown(e, "4")}
-            on:pointerup={() => pointerUp("4")}
-            on:pointercancel={pointerCancel}
-            disabled={busy}>‹</button>
-          <button
-            aria-label="Next song"
-            class:holding={holdingBtn === "5"}
-            class:long-held={holdingBtn === "5" && holdLevel >= 1}
-            class:extra-long-held={holdingBtn === "5" && holdLevel >= 2}
-            on:pointerdown={(e) => pointerDown(e, "5")}
-            on:pointerup={() => pointerUp("5")}
-            on:pointercancel={pointerCancel}
-            disabled={busy}>›</button>
+          <button aria-label="Previous song" on:click={() => short("4")} disabled={busy}>‹</button>
+          <button aria-label="Next song" on:click={() => short("5")} disabled={busy}>›</button>
         </div>
       </div>
       <div class="stepper">
         <span class="label">Part</span>
         <div class="pn">
-          <button
-            aria-label="Previous part"
-            class:holding={holdingBtn === "1"}
-            class:long-held={holdingBtn === "1" && holdLevel >= 1}
-            class:extra-long-held={holdingBtn === "1" && holdLevel >= 2}
-            on:pointerdown={(e) => pointerDown(e, "1")}
-            on:pointerup={() => pointerUp("1")}
-            on:pointercancel={pointerCancel}
-            disabled={busy}>‹</button>
-          <button
-            aria-label="Next part"
-            class:holding={holdingBtn === "3"}
-            class:long-held={holdingBtn === "3" && holdLevel >= 1}
-            class:extra-long-held={holdingBtn === "3" && holdLevel >= 2}
-            on:pointerdown={(e) => pointerDown(e, "3")}
-            on:pointerup={() => pointerUp("3")}
-            on:pointercancel={pointerCancel}
-            disabled={busy}>›</button>
+          <button aria-label="Previous part" on:click={() => short("1")} disabled={busy}>‹</button>
+          <button aria-label="Next part" on:click={() => short("3")} disabled={busy}>›</button>
         </div>
       </div>
     </div>
 
-    <button
-      class="select primary"
-      class:holding={holdingBtn === "2"}
-      class:long-held={holdingBtn === "2" && holdLevel >= 1}
-      class:extra-long-held={holdingBtn === "2" && holdLevel >= 2}
-      on:pointerdown={(e) => pointerDown(e, "2")}
-      on:pointerup={() => pointerUp("2")}
-      on:pointercancel={pointerCancel}
-      disabled={busy}>Select</button>
+    <button class="select primary" on:click={() => short("2")} disabled={busy}>Select</button>
 
-    <!-- Encoder / menu (secondary) -->
+    <!-- Encoder section -->
     <div class="menu">
-      <span class="eyebrow">Menu · encoder</span>
-      <div class="menu-keys">
-        <button aria-label="Menu up" on:click={() => dpad("up")} disabled={busy}>↑</button>
-        <button aria-label="Menu down" on:click={() => dpad("down")} disabled={busy}>↓</button>
-        <button aria-label="Rotate counter-clockwise" on:click={() => dpad("CCW")} disabled={busy}>⟲</button>
-        <button aria-label="Rotate clockwise" on:click={() => dpad("CW")} disabled={busy}>⟳</button>
+      <span class="eyebrow">Encoder</span>
+      <div class="enc-row">
+        <div class="enc-rotate">
+          <button aria-label="Rotate counter-clockwise" on:click={() => dpad("CCW")} disabled={busy}>⟲</button>
+          <button aria-label="Rotate clockwise" on:click={() => dpad("CW")} disabled={busy}>⟳</button>
+        </div>
+        <!-- Encoder push button — tap to confirm, hold for menus -->
+        <button
+          class="enc-push"
+          class:holding={encHolding && encLevel === 0}
+          class:level-1={encLevel >= 1}
+          class:level-2={encLevel >= 2}
+          class:level-3={encLevel >= 3}
+          aria-label="Encoder push — tap to confirm, hold for menus"
+          on:pointerdown={encPointerDown}
+          on:pointerup={encPointerUp}
+          on:pointercancel={encPointerCancel}
+          disabled={busy}
+        >{encHolding ? encHoldLabel : "Push"}</button>
       </div>
     </div>
   </div>
@@ -226,8 +215,6 @@
     align-items: center;
     justify-content: center;
     gap: var(--s2);
-    /* Fixed display height — never grows/shrinks with the message (1–4 lines all
-       stay vertically centered in the same box). */
     height: 182px;
     overflow: hidden;
     background: var(--inset);
@@ -295,57 +282,75 @@
     font-size: 1.35rem;
     line-height: 1;
     color: var(--text-dim);
-    transition: background 0.15s, color 0.15s;
-    user-select: none;
-    touch-action: none;
   }
   .pn button:hover {
     background: var(--panel-2);
     color: var(--text);
   }
 
-  /* Hold-state feedback for numbered buttons */
-  .pn button.holding,
-  .select.holding {
-    background: var(--panel-2);
-    color: var(--text);
-  }
-  .pn button.long-held,
-  .select.long-held {
-    background: color-mix(in srgb, var(--accent) 20%, var(--panel-2));
-    color: var(--accent);
-  }
-  .pn button.extra-long-held,
-  .select.extra-long-held {
-    background: color-mix(in srgb, var(--accent) 40%, var(--panel-2));
-    color: var(--accent);
-  }
-
-  /* Select — the one prominent action */
+  /* Select */
   .select {
     padding: var(--s4);
     font-size: var(--t-base);
-    user-select: none;
-    touch-action: none;
   }
 
-  /* Encoder / menu — secondary */
+  /* Encoder section */
   .menu {
     display: flex;
     flex-direction: column;
     gap: var(--s2);
   }
-  .menu-keys {
+  .enc-row {
+    display: flex;
+    gap: var(--s2);
+    align-items: stretch;
+  }
+  .enc-rotate {
     display: flex;
     gap: var(--s2);
   }
-  .menu-keys button {
+  .enc-rotate button {
     flex: 1;
     height: 42px;
+    width: 52px;
     font-size: 1.1rem;
     color: var(--text-dim);
   }
-  .menu-keys button:hover {
+  .enc-rotate button:hover {
     color: var(--text);
+  }
+
+  /* Encoder push — the hold target */
+  .enc-push {
+    flex: 1;
+    height: 42px;
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-dim);
+    transition: background 0.2s, color 0.2s;
+    user-select: none;
+    touch-action: none;
+  }
+  .enc-push:hover {
+    color: var(--text);
+  }
+  .enc-push.holding {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+  /* 1 s — sub-menu / back */
+  .enc-push.level-1 {
+    background: color-mix(in srgb, var(--accent) 15%, var(--panel-2));
+    color: var(--accent);
+  }
+  /* 3 s — global menu */
+  .enc-push.level-2 {
+    background: color-mix(in srgb, var(--accent) 30%, var(--panel-2));
+    color: var(--accent);
+  }
+  /* 6 s — power menu */
+  .enc-push.level-3 {
+    background: color-mix(in srgb, var(--accent) 50%, var(--panel-2));
+    color: var(--accent);
   }
 </style>
