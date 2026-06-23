@@ -56,6 +56,43 @@ export function presetOptions(def: any): PresetOption[] | null {
  * even if it falls outside the derived set — so opening an editor never silently
  * rewrites a preset the hardware happens to hold.
  */
+// ── Per-part parameter editing ──────────────────────────────────────────────
+// A pedal definition's `Parameters` group lists editable per-part settings. Only
+// direct leaf entries with a `cc` are addressable by the firmware's setParams
+// (ConfigLoader reads part.pedals[*].params; MidiPedal resolves each name against
+// the Parameters group's direct children). Nested type-conditional groups and
+// pure triggers are not stored. Each leaf is one of:
+//   • enum  — a `dict` map; the stored value is the chosen dict KEY string;
+//   • on/off — `off`/`on` pair, stored as the string "off"/"on";
+//   • range — numeric `min`/`max`, stored as a number in [min,max].
+export type ParamSpec =
+  | { name: string; kind: "enum"; options: string[] }
+  | { name: string; kind: "range"; min: number; max: number };
+
+/** Editable per-part parameter specs derived from a pedal definition, in order. */
+export function paramSpecs(def: any): ParamSpec[] {
+  const params = def?.["Parameters"];
+  if (!params || typeof params !== "object") return [];
+  const out: ParamSpec[] = [];
+  for (const [name, info] of Object.entries(params) as [string, any][]) {
+    if (!info || typeof info !== "object") continue;
+    if (info.dict && typeof info.dict === "object") {
+      out.push({ name, kind: "enum", options: Object.keys(info.dict) });
+    } else if (typeof info.min === "number" && typeof info.max === "number") {
+      out.push({ name, kind: "range", min: Number(info.min), max: Number(info.max) });
+    } else if ("off" in info && "on" in info) {
+      out.push({ name, kind: "enum", options: ["off", "on"] });
+    }
+    // else: nested type group or pure trigger — not a directly-addressable param.
+  }
+  return out;
+}
+
+/** The default value for a freshly-added parameter (first option / range min). */
+export function paramDefault(spec: ParamSpec): number | string {
+  return spec.kind === "range" ? spec.min : spec.options[0];
+}
+
 export function presetChoices(
   defs: Record<string, any>,
   pedal: string,

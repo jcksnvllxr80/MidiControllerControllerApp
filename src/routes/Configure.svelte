@@ -3,7 +3,13 @@
   import { request } from "../lib/transport";
   import { ENTITY_OPS, type EntityKind, type Request } from "../lib/protocol";
   import { humanizeError } from "../lib/errors";
-  import { presetOptions, presetChoices } from "../lib/presets";
+  import {
+    presetOptions,
+    presetChoices,
+    paramSpecs,
+    paramDefault,
+    type ParamSpec,
+  } from "../lib/presets";
 
   // ── Entity rail definition (the vertical icon nav) ──────────────────────
   type KindDef = { key: EntityKind; label: string; singular: string };
@@ -31,6 +37,7 @@
   let addSongChoice = "";
   let newPartName = "";
   let addPedalChoice: Record<string, string> = {}; // per part name
+  let addParamChoice: Record<string, string> = {}; // per "part|pedal"
   let pedalDefs: Record<string, any> = {}; // pedal name -> definition (for preset options)
 
   // Advanced raw-JSON escape hatch
@@ -235,6 +242,50 @@
     editor = editor;
   }
 
+  // ── Per-pedal Parameters (per-part overrides) ──────────────────────────
+  // Spec lookup by pedal name; specs come from the pedal definition's
+  // `Parameters` group (see paramSpecs). Values live in pd.params.
+  function specsFor(pedalName: string): ParamSpec[] {
+    return paramSpecs(pedalDefs[pedalName]);
+  }
+  function specOf(pedalName: string, param: string): ParamSpec | undefined {
+    return specsFor(pedalName).find((s) => s.name === param);
+  }
+  function paramsLeft(pedalName: string, pd: any): ParamSpec[] {
+    const used = pd.params ?? {};
+    return specsFor(pedalName).filter((s) => !(s.name in used));
+  }
+  function addParam(partName: string, pedalName: string) {
+    const key = `${partName}|${pedalName}`;
+    const choice = addParamChoice[key];
+    if (!choice) return;
+    const spec = specOf(pedalName, choice);
+    if (!spec) return;
+    const pd = editor.parts[partName].pedals[pedalName];
+    if (!pd.params) pd.params = {};
+    pd.params[choice] = paramDefault(spec);
+    addParamChoice[key] = "";
+    editor = editor;
+  }
+  function removeParam(partName: string, pedalName: string, param: string) {
+    delete editor.parts[partName].pedals[pedalName].params[param];
+    editor = editor;
+  }
+  function setParamValue(
+    partName: string,
+    pedalName: string,
+    param: string,
+    raw: string,
+  ) {
+    const spec = specOf(pedalName, param);
+    // Range params persist as numbers (firmware range-checks ints); enum/on-off
+    // persist as the chosen key string (firmware looks them up by key).
+    const v: number | string =
+      spec?.kind === "range" && raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw;
+    editor.parts[partName].pedals[pedalName].params[param] = v;
+    editor = editor;
+  }
+
   // ── Advanced raw JSON ──────────────────────────────────────────────────
   function toggleRaw() {
     showRaw = !showRaw;
@@ -390,34 +441,89 @@
               <ul class="pedals">
                 {#each entries(part.pedals) as [pedalName, pd] (pedalName)}
                   {@const opts = presetChoices(pedalDefs, pedalName, pd.preset)}
+                  {@const specs = specsFor(pedalName)}
+                  {@const left = paramsLeft(pedalName, pd)}
                   <li class="pedal">
-                    <label class="toggle" title="Engaged">
-                      <input type="checkbox" bind:checked={pd.engaged} />
-                      <span class="toggle-name">{pedalName}</span>
-                    </label>
-                    <span class="grow"></span>
-                    <label class="preset">
-                      <span class="eyebrow">preset</span>
-                      {#if opts}
-                        <select
-                          class="preset-input"
-                          aria-label="{pedalName} preset"
-                          on:change={(e) => setPreset(partName, pedalName, e.currentTarget.value)}
-                        >
-                          {#each opts as o (o.value)}
-                            <option value={String(o.value)} selected={String(o.value) === String(pd.preset ?? "")}>{o.label}</option>
-                          {/each}
-                        </select>
-                      {:else}
-                        <input
-                          class="preset-input"
-                          aria-label="{pedalName} preset"
-                          value={pd.preset ?? ""}
-                          on:input={(e) => setPreset(partName, pedalName, e.currentTarget.value)}
-                        />
-                      {/if}
-                    </label>
-                    <button class="icon danger" title="Remove pedal" aria-label="Remove {pedalName}" on:click={() => removePedal(partName, pedalName)}>×</button>
+                    <div class="pedal-main">
+                      <label class="toggle" title="Engaged">
+                        <input type="checkbox" bind:checked={pd.engaged} />
+                        <span class="toggle-name">{pedalName}</span>
+                      </label>
+                      <span class="grow"></span>
+                      <label class="preset">
+                        <span class="eyebrow">preset</span>
+                        {#if opts}
+                          <select
+                            class="preset-input"
+                            aria-label="{pedalName} preset"
+                            on:change={(e) => setPreset(partName, pedalName, e.currentTarget.value)}
+                          >
+                            {#each opts as o (o.value)}
+                              <option value={String(o.value)} selected={String(o.value) === String(pd.preset ?? "")}>{o.label}</option>
+                            {/each}
+                          </select>
+                        {:else}
+                          <input
+                            class="preset-input"
+                            aria-label="{pedalName} preset"
+                            value={pd.preset ?? ""}
+                            on:input={(e) => setPreset(partName, pedalName, e.currentTarget.value)}
+                          />
+                        {/if}
+                      </label>
+                      <button class="icon danger" title="Remove pedal" aria-label="Remove {pedalName}" on:click={() => removePedal(partName, pedalName)}>×</button>
+                    </div>
+
+                    {#if specs.length}
+                      <div class="pedal-params">
+                        {#each entries(pd.params) as [param, value] (param)}
+                          {@const spec = specOf(pedalName, param)}
+                          <div class="param">
+                            <span class="param-name">{param}</span>
+                            {#if spec && spec.kind === "enum"}
+                              <select
+                                class="param-input"
+                                aria-label="{pedalName} {param}"
+                                on:change={(e) => setParamValue(partName, pedalName, param, e.currentTarget.value)}
+                              >
+                                {#each spec.options as o (o)}
+                                  <option value={o} selected={String(o) === String(value ?? "")}>{o === " " ? "(blank)" : o}</option>
+                                {/each}
+                              </select>
+                            {:else if spec && spec.kind === "range"}
+                              <input
+                                class="param-input"
+                                type="number"
+                                min={spec.min}
+                                max={spec.max}
+                                aria-label="{pedalName} {param}"
+                                value={value ?? spec.min}
+                                on:input={(e) => setParamValue(partName, pedalName, param, e.currentTarget.value)}
+                              />
+                              <span class="param-bounds mono">{spec.min}–{spec.max}</span>
+                            {:else}
+                              <!-- Unknown param (spec dropped from def): keep raw value, editable as text. -->
+                              <input
+                                class="param-input"
+                                aria-label="{pedalName} {param}"
+                                value={value ?? ""}
+                                on:input={(e) => setParamValue(partName, pedalName, param, e.currentTarget.value)}
+                              />
+                            {/if}
+                            <button class="icon danger" title="Remove parameter" aria-label="Remove {param}" on:click={() => removeParam(partName, pedalName, param)}>×</button>
+                          </div>
+                        {/each}
+                        {#if left.length}
+                          <div class="adder param-adder">
+                            <select bind:value={addParamChoice[`${partName}|${pedalName}`]} aria-label="Add parameter to {pedalName}">
+                              <option value="" disabled selected>Add a parameter…</option>
+                              {#each left as s (s.name)}<option value={s.name}>{s.name}</option>{/each}
+                            </select>
+                            <button on:click={() => addParam(partName, pedalName)} disabled={!addParamChoice[`${partName}|${pedalName}`]}>Add</button>
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
                   </li>
                 {/each}
               </ul>
@@ -769,11 +875,54 @@
   }
   .pedal {
     display: flex;
-    align-items: center;
-    gap: var(--s3);
+    flex-direction: column;
+    gap: var(--s2);
     padding: var(--s2);
     background: var(--inset);
     border-radius: var(--r-sm);
+  }
+  .pedal-main {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+  }
+  .pedal-params {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
+    padding-left: calc(16px + var(--s2)); /* align under the toggle name */
+    border-left: 1px solid var(--line);
+    margin-left: 6px;
+  }
+  .param {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+  }
+  .param-name {
+    flex: 1;
+    font-size: var(--t-sm);
+    color: var(--text-dim);
+  }
+  .param-input {
+    min-width: 6rem;
+    max-width: 13rem;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+  }
+  select.param-input {
+    padding-right: 1.6rem;
+  }
+  input[type="number"].param-input {
+    width: 6rem;
+    min-width: 0;
+  }
+  .param-bounds {
+    font-size: var(--t-2xs);
+    color: var(--text-faint);
+  }
+  .param-adder {
+    margin-top: var(--s1);
   }
   .toggle {
     display: flex;
